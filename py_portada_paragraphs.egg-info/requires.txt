@@ -1,0 +1,4 @@
+opencv-python
+doclayout-YOLO@ git+https://github.com/opendatalab/DocLayout-YOLO.git
+numpy
+huggingface_hub

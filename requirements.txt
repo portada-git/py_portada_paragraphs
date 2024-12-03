@@ -1,0 +1,4 @@
+opencv-python >= 4.8,<4.9
+numpy
+doclayout-YOLO @ git+https://github.com/opendatalab/DocLayout-YOLO.git
+huggingface_hub

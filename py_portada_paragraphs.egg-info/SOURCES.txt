@@ -1,0 +1,13 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+py_portada_paragraphs/__init__.py
+py_portada_paragraphs/layout_structure.py
+py_portada_paragraphs/py_yolo_paragraphs.py
+py_portada_paragraphs.egg-info/PKG-INFO
+py_portada_paragraphs.egg-info/SOURCES.txt
+py_portada_paragraphs.egg-info/dependency_links.txt
+py_portada_paragraphs.egg-info/not-zip-safe
+py_portada_paragraphs.egg-info/requires.txt
+py_portada_paragraphs.egg-info/top_level.txt
