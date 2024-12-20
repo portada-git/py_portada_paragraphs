@@ -202,7 +202,7 @@ def raw_predictions(image, model: YOLOv10, imgsz=1024, conf=0.2, device="cpu",
     return ret
 
 
-def extract_fragments_from_image(image, model: YOLOv10, imgsz=1024, conf=0.2, device="cpu",
+def extract_fragments_from_image(image, model: YOLOv10, imgsz=1024, conf=0.1, device="cpu",
                                  iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
     det_res = model.predict(image, imgsz=imgsz, conf=conf, device=device)
     all_detections = det_res[0].boxes.data.cpu().numpy()

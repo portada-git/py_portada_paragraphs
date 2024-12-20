@@ -1,5 +1,7 @@
-from builtins import staticmethod
+from builtins import staticmethod, enumerate
 from typing import Union
+
+from torch._lazy.extract_compiled_graph import force_lazy_device
 
 
 def calculate_coordinates(p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0):
@@ -33,7 +35,7 @@ def calculate_coordinates(p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2
     return x1, y1, x2, y2
 
 
-def overlap_horozontally(box1: list, box2: list, threshold: int):
+def overlap_horizontally(box1: list, box2: list, threshold: int):
     """
     Check if 2 rectangular areas intersect horizontally or not
     :param box1: represents the box of a rectangular area as a list of integers. If the list has only 2 positions
@@ -131,7 +133,7 @@ class ThresholdAttribute:
 class AbstractSection:
 
     def __init__(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
-                 threshold: Union[int, ThresholdAttribute, None] = 40):
+                 threshold: Union[int, ThresholdAttribute, None] = 40, container=None):
         if type(threshold) is ThresholdAttribute:
             self._threshold = threshold
         else:
@@ -140,6 +142,7 @@ class AbstractSection:
                 self.threshold = threshold
         self._diagonal_points = None
         self.diagonal_points = p1, p2, x2, y2
+        self.section_container = container
 
     @property
     def threshold(self):
@@ -265,59 +268,6 @@ class AbstractSection:
     #     return ret
 
 
-class SingleSection(AbstractSection):
-    """
-    Class used to represent a single section. In real world, a single section has not layout structure and can only
-    contain text.
-    This implementation maintains only the rectangle information.
-
-    Attributtes
-    -----------
-
-
-    Methods
-    -------
-
-    """
-    def __init__(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
-                 threshold: Union[int, ThresholdAttribute, None] = 40):
-        super().__init__(p1, p2, x2, y2, threshold=threshold)
-        self._len = 0
-        self._suma_center = 0
-
-    @property
-    def center(self):
-        return self._suma_center/self._len
-
-    def add_writing_area(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
-                         guess_width=-1):
-        x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
-        self.bottom = y2
-        self._len +=1
-        self._suma_center += (x1+x2)/2
-        if x1 < self.left:
-            self.left = x1
-        if x2 > self.right:
-            self.right = x2
-        return True, -1, -1, -1
-
-    def get_single_sections_as_boxes(self, boxes=[]):
-        boxes.append(self.coordinates)
-
-    def get_compatible_status(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0):
-        ret = super().get_compatible_status(p1, p2, x2, y2)
-        if ret != 0:
-            x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
-            ldif = self.center - (x1+x2)/2
-            if abs(ldif) <= self.threshold:
-                ret = 0
-            elif ldif > self.threshold:
-                ret = -1
-            else:
-                ret = 1
-        return ret
-
-
 class StructuredSection(AbstractSection):
     """
     A StructuredSection class implements a structured section which can contain 2 kinds of structures: section stack or
@@ -333,13 +283,11 @@ class StructuredSection(AbstractSection):
     """
 
     def __init__(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
-                 threshold: Union[int, ThresholdAttribute, None] = 40, first_section=None):
-        super().__init__(p1, p2, x2, y2, threshold)
+                 threshold: Union[int, ThresholdAttribute, None] = 40, container=None):
+        super().__init__(p1, p2, x2, y2, threshold, container)
         self._sections = []
         self.is_rigth_expandable = False
         self.is_bottom_expandable = True
-        if first_section is not None:
-            self._sections.append(first_section)
 
     @property
     def sections(self):
@@ -374,24 +322,116 @@ class StructuredSection(AbstractSection):
         self._sections.append(section)
 
 
+class MainLayout(StructuredSection):
+    def __init__(self, w: int, threshold=40):
+        super().__init__(0, 0, w, 0, threshold)
+        self.is_rigth_expandable = False
+
+    def get_single_sections_as_boxes(self):
+        boxes = []
+        return super().get_single_sections_as_boxes(boxes)
+
+    # def adjust_size_of_sections(self):
+    #     #adjust vertically
+    #     #order bigsection vertically
+    #     sorted(self.sections, key=lambda x: x.top*10000+x.left)
+    #     for pos in range(len(self.sections)):
+    #         offset = 1
+    #         while pos+offset<len(self.sections) and overlap_vertically(self.sections[pos].coodinates,
+    #                                                                    self.sections[pos+offset].coodinates):
+    #             offset += 1
+    #         if offset<len(self.sections):
+    #             #need adjust
+    #             self.sections[pos].bottom = (self.sections[pos].bottom + self.sections[pos+offset].top)//2
+    #
+
+    @staticmethod
+    def build_layout(writing_area_list, w: int, threshold=None):
+        main_layout = MainLayout(w)
+        if threshold is not None:
+            main_layout.threshold = threshold
+
+        min_left = 100000
+        max_right = 0
+        for writing_area in writing_area_list:
+            if min_left > writing_area[0]:
+                min_left = writing_area[0]
+            if max_right < writing_area[2]:
+                max_right = writing_area[2]
+
+        writing_area_list.sort(key=lambda x: x[1] * 10000 + x[0])
+        lef_unexplored = min_left
+        top_unexplored = 0
+        right_unexplored = max_right
+        for i, writing_area in enumerate(writing_area_list):
+            added = False
+            guess_left = min_left
+            guess_right = max_right
+            force_sibling = False
+            offset = -1
+            while (i + offset) >= 0 and overlap_vertically(writing_area_list[i + offset],
+                                                           writing_area, main_layout.threshold):
+                if writing_area_list[i + offset][0] < writing_area[0] and guess_left < writing_area_list[i + offset][2]:
+                    guess_left = writing_area_list[i + offset][2]
+                elif writing_area[0] <= writing_area_list[i + offset][0] < guess_right:
+                    guess_right = writing_area_list[i + offset][0]
+                force_sibling = True
+                offset -= 1
+            offset = 1
+            while (i + offset) < len(writing_area_list) and overlap_vertically(writing_area_list[i + offset],
+                                                                               writing_area, main_layout.threshold):
+                if writing_area_list[i + offset][0] < writing_area[0] and guess_left < writing_area_list[i + offset][2]:
+                    guess_left = writing_area_list[i + offset][2]
+                elif writing_area[0] <= writing_area_list[i + offset][0] < guess_right:
+                    guess_right = writing_area_list[i + offset][0]
+                offset += 1
+            guess_width = guess_right - guess_left
+            pos = len(main_layout.sections) - 1
+            if force_sibling:
+                added, lef_unexplored, top_unexplored, right_unexplored = main_layout.sections[pos].add_writing_area(
+                    writing_area, guess_width=guess_width, force_sibling=force_sibling)
+            else:
+                found = False
+                while not found and pos >= 0:
+                    found = main_layout.sections[pos].is_area_inside(writing_area)
+                    if overlap_horizontally(
+                            [main_layout.sections[pos].left, 0,  main_layout.sections[pos].right, 0],
+                            writing_area, main_layout.threshold):
+                        pos = -1
+                    pos -= 1
+                if found:
+                    pos += 1
+                    added, lef_unexplored, top_unexplored, right_unexplored = main_layout.sections[pos].add_writing_area(
+                        writing_area, guess_width=guess_width)
+                if not added:
+                    if lef_unexplored + main_layout.threshold > writing_area[0]:
+                        lef_unexplored = min_left
+                    if right_unexplored - main_layout.threshold < writing_area[2]:
+                        right_unexplored = max_right
+                    new_section = BigSectionOfSibling(main_layout, lef_unexplored, writing_area[1], right_unexplored,
+                                                      top_unexplored,
+                                                      threshold=main_layout._threshold)
+                    main_layout.add_new_section(new_section)
+                    new_section.add_writing_area(writing_area, guess_width=guess_width)
+
+        # main_layout.build_layout_structure(writing_area_list, 0)
+        return main_layout
+
+
 class BigSectionOfSibling(StructuredSection):
-    def __init__(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
-                 threshold: Union[int, ThresholdAttribute, None] = 40, first_section=None,
-                 writing_area: list = None, guess_width=-1):
-        super().__init__(p1, p2, x2, y2, threshold, first_section)
+    def __init__(self, container: MainLayout, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
+                 threshold: Union[int, ThresholdAttribute, None] = 40):
+        super().__init__(p1, p2, x2, y2, threshold, container)
         self._width_sibling = -1
-        if first_section is not None:
-            self.siblings.append(first_section)
-        if writing_area is not None:
-            self.add_writing_area(writing_area, guess_width=guess_width)
 
     @property
     def width_sibling(self):
-        if self._width_sibling == -1:
-            ret = self.width
-        else:
-            ret = self._width_sibling
-        return ret
+        # if self._width_sibling == -1:
+        #     ret = self.width
+        # else:
+        #     ret = self._width_sibling
+        # return ret
+        return self._width_sibling
 
     @property
     def siblings(self):
@@ -400,7 +440,7 @@ class BigSectionOfSibling(StructuredSection):
     def is_area_compatible(self, pos: int, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
                            guess_width=-1):
         x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
-        ret = self._has_area_similar_width(x1, y1, x2, y2, guess_width)
+        ret = self._has_area_similar_width(pos, x1, y1, x2, y2, guess_width)
         if not ret:
             ret = self._has_area_similar_center(pos, x1, y1, x2, y2)
             if ret and len(self.siblings) > pos + 1:
@@ -411,7 +451,7 @@ class BigSectionOfSibling(StructuredSection):
         ret = False
         if pos in range(len(self.siblings)):
             x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
-            dif = abs(self.siblings[pos].center - (x1 + x2) / 2) - self.threshold
+            dif = (abs(self.siblings[pos].center - (x1 + x2) / 2) % self.width_sibling) - self.threshold
             ret = dif <= 0
         return ret
 
@@ -424,16 +464,28 @@ class BigSectionOfSibling(StructuredSection):
             edges.append(3)
         return contains(edges, self.coordinates, (x1, y1, x2, y2), self.threshold)
 
-    def _has_area_similar_width(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
+    def _area_belongs_to_sibling(self, pos: int, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0):
+        x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
+        dif = abs(x1 - self.siblings[pos].left) - self.threshold
+        if dif > 0:
+            dif = abs(self.siblings[pos].center - ((x1+x2)/2)) - self.threshold
+        return dif<=0
+
+    def _has_area_similar_width(self, pos: int, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
                                 guess_width=-1):
+        margin = self.threshold + self.threshold + self.threshold
         if self._width_sibling == -1:
             dif = 0
         else:
             x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
             dif = abs(x2 - x1 - self.width_sibling)
-            if dif > (self.threshold + self.threshold):
+            if dif > margin:
                 dif = abs(guess_width - self.width_sibling)
-        return dif <= (self.threshold + self.threshold)
+            if dif > margin and pos in range(len(self.siblings)):
+                dif = abs(x2 - x1 - self.siblings[pos].max_width)
+            if dif > margin and pos in range(len(self.siblings)):
+                dif = abs(guess_width - self.siblings[pos].max_width)
+        return dif <= margin
 
     def _search_sibling_pos(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0):
         x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
@@ -445,7 +497,7 @@ class BigSectionOfSibling(StructuredSection):
         return pos - 1, status
 
     def _can_insert_sibling(self, pos):
-        if pos <=-1 or len(self.siblings)==0:
+        if pos <= -1 or len(self.siblings) == 0:
             x1 = self.left
             x2 = self.right
         elif pos == len(self.siblings):
@@ -457,19 +509,29 @@ class BigSectionOfSibling(StructuredSection):
         else:
             x1 = self.siblings[pos - 1].right
             x2 = self.siblings[pos].left
-        dif = abs(x2 - x1 - self.width_sibling)
+        dif = 0 if self.width_sibling == -1 else abs(x2 - x1 - self.width_sibling)
         return dif <= (self.threshold + self.threshold)
 
-    def _insert_area(self, pos, status, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0, guess_width=-1):
+    def _insert_area(self, pos, status, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0, guess_width=-1,
+                     force_sibling=False):
         added = True
         x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
-        if status == -1 and self._can_insert_sibling(pos):
-            single_section = SingleSection(x1, self.top, x1 + guess_width, self.top, threshold=self._threshold)
+        if force_sibling:
+            force_insert = not overlap_horizontally([x1,y1,x2,y2], self.siblings[pos].coordinates, self.threshold)
+            force_insert = force_insert and True if (pos-status) not in range(len(self.siblings)) else \
+                        not overlap_horizontally([x1,y1,x2,y2], self.siblings[pos-status].coordinates, self.threshold)
+        else:
+            force_insert=False
+        if status == -1 and (force_insert or self._can_insert_sibling(pos)):
+            single_section = SingleSection(self, x1, self.top, x2, self.top, guess_width,
+                                           threshold=self._threshold)
             self.siblings.insert(pos, single_section)
             self.siblings.sort(key=lambda x: x.left)
             single_section.add_writing_area(x1, y1, x2, y2)
-        elif self._can_insert_sibling(pos+1):
-            single_section = SingleSection(x1, self.top, x1 + guess_width, self.top, threshold=self._threshold)
+
+        elif force_insert or self._can_insert_sibling(pos + 1):
+            single_section = SingleSection(self, x1, self.top, x2, self.top, guess_width,
+                                           threshold=self._threshold)
             self.siblings.append(single_section)
             single_section.add_writing_area(x1, y1, x2, y2)
         else:
@@ -478,7 +540,7 @@ class BigSectionOfSibling(StructuredSection):
         return added
 
     def add_writing_area(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
-                         guess_width=-1):
+                         guess_width=-1, force_sibling=False):
         x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
         # if is_area_expandable:
         #     x1 = self.left
@@ -497,18 +559,26 @@ class BigSectionOfSibling(StructuredSection):
         else:
             pos, status = self._search_sibling_pos(x1, y1, x2, y2)
             added = False
-            if self.is_area_compatible(pos, x1, y1, x2, y2, guess_width):
-                # Try to add
+            if force_sibling:
                 if status == 0:
-                    # add to pos
                     added, left_unexplored, right_unexplored, top_unexplored = \
                         self.siblings[pos].add_writing_area(x1, y1, x2, y2, guess_width=guess_width)
                 else:
-                    added = self._insert_area(pos, status, x1, y1, x2, y2, guess_width)
-            if added:
-                if self._width_sibling < guess_width:
-                    self._width_sibling = guess_width
-            else:
+                    added = self._insert_area(pos, status, x1, y1, x2, y2, guess_width, force_sibling)
+            # elif self.is_area_compatible(pos, x1, y1, x2, y2, guess_width):
+            #     # Try to add
+            #     if status == 0:
+            #         # add to pos
+            #         added, left_unexplored, right_unexplored, top_unexplored = \
+            #             self.siblings[pos].add_writing_area(x1, y1, x2, y2, guess_width=guess_width)
+            #     else:
+            #         added = self._insert_area(pos, status, x1, y1, x2, y2, guess_width)
+            elif status == 0 and self._area_belongs_to_sibling(pos, x1, y1, x2, y2):
+                added, left_unexplored, right_unexplored, top_unexplored = \
+                     self.siblings[pos].add_writing_area(x1, y1, x2, y2, guess_width=guess_width)
+            elif status != 0 and self.is_area_compatible(pos, x1, y1, x2, y2, guess_width):
+                added = self._insert_area(pos, status, x1, y1, x2, y2, guess_width)
+            if not added:
                 if pos == -1:
                     left_unexplored = self.left
                     right_unexplored = self.right
@@ -550,77 +620,95 @@ class BigSectionOfSibling(StructuredSection):
 #     return pos
 
 
-class MainLayout(StructuredSection):
-    def __init__(self, w: int, threshold=40):
-        super().__init__(0, 0, w, 0, threshold)
-        self.is_rigth_expandable = False
+class SingleSection(AbstractSection):
+    """
+    Class used to represent a single section. In real world, a single section has not layout structure and can only
+    contain text.
+    This implementation maintains only the rectangle information.
 
-    def get_single_sections_as_boxes(self):
-        boxes = []
-        return super().get_single_sections_as_boxes(boxes)
+    Attributtes
+    -----------
 
-    @staticmethod
-    def build_layout(writing_area_list, w: int, threshold=None):
-        main_layout = MainLayout(w)
-        if threshold is not None:
-            main_layout.threshold = threshold
 
-        min_left = 100000
-        max_right = 0
-        for writing_area in writing_area_list:
-            if min_left > writing_area[0]:
-                min_left = writing_area[0]
-            if max_right < writing_area[2]:
-                max_right = writing_area[2]
+    Methods
+    -------
 
-        writing_area_list.sort(key=lambda x: x[1] * 10000 + x[0])
-        lef_unexplored = min_left
-        top_unexplored = 0
-        right_unexplored = max_right
-        for i, writing_area in enumerate(writing_area_list):
-            added = False
-            guess_width = max_right - min_left
-            offset = -1
-            while (i + offset) >= 0 and overlap_vertically(writing_area_list[i + offset],
-                                                           writing_area, main_layout.threshold):
-                if (writing_area_list[i + offset][0] < writing_area[0] and
-                        (writing_area_list[i + offset][2] - writing_area[2]) < guess_width):
-                    guess_width = writing_area[2] - writing_area_list[i + offset][2]
-                elif (writing_area_list[i + offset][0] >= writing_area[0] and
-                        (writing_area_list[i + offset][0] - writing_area[0]) < guess_width):
-                    guess_width = writing_area_list[i + offset][0] - writing_area[0]
-                offset -= 1
-            offset = 1
-            while (i + offset) < len(writing_area_list) and overlap_vertically(writing_area_list[i + offset],
-                                                                               writing_area, main_layout.threshold):
-                if (writing_area_list[i + offset][0] < writing_area[0] and
-                        (writing_area_list[i + offset][2] - writing_area[2]) < guess_width):
-                    guess_width = writing_area[2] - writing_area_list[i + offset][2]
-                elif (writing_area_list[i + offset][0] > writing_area[0] and
-                        (writing_area_list[i + offset][0] - writing_area[0]) < guess_width):
-                    guess_width = writing_area_list[i + offset][0] - writing_area[0]
-                offset += 1
-            pos = len(main_layout.sections) - 1
-            found = False
-            while not found and pos >= 0:
-                found = main_layout.sections[pos].is_area_inside(writing_area)
-                pos -= 1
-            if found:
-                pos += 1
-                added, lef_unexplored, top_unexplored, right_unexplored = main_layout.sections[pos].add_writing_area(
-                    writing_area, guess_width=guess_width)
-            if not added:
-                if lef_unexplored + main_layout.threshold > writing_area[0]:
-                    lef_unexplored = min_left
-                if right_unexplored - main_layout.threshold < writing_area[2]:
-                    right_unexplored = max_right
-                new_section = BigSectionOfSibling(lef_unexplored, writing_area[1], right_unexplored, top_unexplored,
-                                                  threshold=main_layout._threshold)
-                main_layout.add_new_section(new_section)
-                new_section.add_writing_area(writing_area, guess_width=guess_width)
+    """
 
-        # main_layout.build_layout_structure(writing_area_list, 0)
-        return main_layout
+    def __init__(self, container: BigSectionOfSibling, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
+                 max_width=-1, threshold: Union[int, ThresholdAttribute, None] = 40):
+        super().__init__(p1, p2, x2, y2, threshold=threshold, container=container)
+        self._len = 0
+        self._suma_center = 0
+        self.max_width = max_width
+        if self.section_container.width_sibling < self.right - self.left:
+            self.section_container._width_sibling = self.right - self.left
+
+    @property
+    def guess_left(self):
+        ret = min(self.right - self.max_width, self.left)
+        if ret < self.section_container.left:
+            ret = self.section_container.left
+        return ret
+
+    @property
+    def guess_right(self):
+        ret = max(self.left + self.max_width, self.right)
+        if ret > self.section_container.right:
+            ret = self.section_container.right
+        return ret
+
+    @property
+    def center(self):
+        return self._suma_center / self._len
+
+    def add_writing_area(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0,
+                         guess_width=-1):
+        x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
+        self.bottom = y2
+        self._len += 1
+        self._suma_center += (x1 + x2) / 2
+        if x1 < self.left:
+            self.left = x1
+        if x2 > self.right:
+            self.right = x2
+        if self.section_container.width_sibling < self.width:
+            self.section_container._width_sibling = self.width
+        if self.section_container.bottom < self.bottom:
+            self.section_container.bottom = self.bottom
+        return True, -1, -1, -1
+
+    def get_single_sections_as_boxes(self, boxes=[]):
+        boxes.append(self.coordinates)
+
+    def get_compatible_status(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0):
+        ret = super().get_compatible_status(p1, p2, x2, y2)
+        if ret != 0:
+            x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
+            ret = self.get_compatible_status_as_guess(x1, y1, x2, y2)
+            if ret != 0:
+                c = (x1 + x2) / 2
+                ldif = c - self.center
+                if abs(ldif) <= self.threshold:
+                    ret = 0
+                elif ldif < self.threshold:
+                    ret = -1
+                else:
+                    ret = 1
+        return ret
+
+    def get_compatible_status_as_guess(self, p1: Union[int, list] = 0, p2: Union[int, list] = 0, x2=0, y2=0):
+        ret = 0
+        x1, y1, x2, y2 = calculate_coordinates(p1, p2, x2, y2)
+        ldif = x1 - self.guess_left + self.threshold
+        rdif = self.guess_right - x2 + self.threshold
+        if ldif >= 0 and rdif >= 0:
+            ret = 0
+        elif ldif < 0:
+            ret = -1
+        else:
+            ret = 1
+        return ret
 
 
 def test_build_layout():
