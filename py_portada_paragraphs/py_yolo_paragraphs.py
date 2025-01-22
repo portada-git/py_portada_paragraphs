@@ -87,6 +87,13 @@ def add_margin(image, x1, y1, x2, y2, margin):
     return x1, y1, x2, y2
 
 
+def get_model(fpath=None):
+    if fpath is None:
+        p = os.path.abspath(os.path.dirname(__file__))
+        fpath = f"{p}/modelo/doclayout_yolo_docstructbench_imgsz1024.pt"
+    return YOLOv10(fpath)
+
+
 def reprocess_large_segment(model, segment, original_coords, imgsz=1024, conf=0.2, device="cpu"):
     """
     Reprocesa un segmento grande para detectar sub-segmentos.
@@ -156,7 +163,7 @@ def remove_completely_overlapped_detections(detections):
     return kept_detections
 
 
-def cajas_faltantes(imagen, cajas, umbral=98):
+def cajas_faltantes(imagen, cajas, umbral=98, margen=0):
     """
     Detecta y crea segmentos para los espacios faltantes entre las cajas detectadas.
     Args:
@@ -175,6 +182,10 @@ def cajas_faltantes(imagen, cajas, umbral=98):
 
     for i, caja in enumerate(cajas_ordenadas):
         x1, y1, x2, y2 = map(int, caja)
+        x1 = max(0, x1-margen)
+        x2 = min(imagen.shape[1], x2+margen)
+        y1 = max(0, y1-margen)
+        y2 = min(imagen.shape[0], y2+margen)
         segmento = imagen[y1:y2, x1:x2]
         segmentos.append((i, segmento))
         # Si no es la última caja, verificar el espacio hasta la siguiente
@@ -185,25 +196,39 @@ def cajas_faltantes(imagen, cajas, umbral=98):
                 # Si hay un espacio significativo, crear un nuevo segmento
                 segmento_espacio = imagen[y2:int(caja_siguiente[1]), x1:x2]
                 segmentos.append((f"{i}_espacio", segmento_espacio))
+        elif i == len(cajas_ordenadas) -1:
+            y2 = imagen.shape[0]
+            espacio = y2 - y1
+            if espacio > umbral:
+                # Si hay un espacio significativo, crear un nuevo segmento
+                segmento_espacio = imagen[y1:y2, x1:x2]
+                segmentos.append((f"{i}_espacio", segmento_espacio))
 
     return segmentos
 
 
-def raw_predictions(image, model: YOLOv10, imgsz=1024, conf=0.2, device="cpu",
+def raw_predictions(image, model: YOLOv10 = None, imgsz=1024, conf=0.2, device="cpu",
                     iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
+    if model is None:
+        model = get_model()
     det_res = model.predict(image, imgsz=imgsz, conf=conf, device=device)
     all_detections = det_res[0].boxes.data.cpu().numpy()
     kept_detections = remove_overlapping_segments(all_detections, iou_threshold, area_ratio_threshold)
-    ret = []
+    ret_boxes = []
+    ret_properties = []
     for detection in kept_detections:
         x1, y1, x2, y2, conf_score, class_id = detection
-        ret.append([int(x1), int(y1), int(x2), int(y2)])
+        ret_boxes.append([int(x1), int(y1), int(x2), int(y2)])
+        ret_properties.append({'box':[int(x1), int(y1), int(x2), int(y2)], 'conf_score':conf_score ,'class_id':class_id, 'class_name':det_res[0].names[class_id],'detection':detection})
 
-    return ret
+    return ret_boxes, ret_properties
 
 
-def extract_fragments_from_image(image, model: YOLOv10, imgsz=1024, conf=0.1, device="cpu",
+def extract_fragments_from_image(image, model: YOLOv10 = None, imgsz=1024, conf=0.1, device="cpu",
                                  iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
+    if model is None:
+        model = get_model()
+
     det_res = model.predict(image, imgsz=imgsz, conf=conf, device=device)
     all_detections = det_res[0].boxes.data.cpu().numpy()
     kept_detections = remove_overlapping_segments(all_detections, iou_threshold, area_ratio_threshold)
@@ -241,12 +266,15 @@ def extract_fragments_from_image(image, model: YOLOv10, imgsz=1024, conf=0.1, de
 
     # Aplicar la función cajas_faltantes
     cajas = np.array([detection[:4] for detection in final_detections])
-    segmentos_con_espacios = cajas_faltantes(image, cajas)
+    segmentos_con_espacios = cajas_faltantes(image, cajas, margen=5)
     return segmentos_con_espacios, final_detections, det_res
 
 
-def extract_fragments_and_get_json(image, model, imgsz=1024, conf=0.2, device="cpu",
+def extract_fragments_and_get_json(image, model: YOLOv10 = None, imgsz=1024, conf=0.1, device="cpu",
                                    iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
+    if model is None:
+        model = get_model()
+
     segmentos_con_espacios, final_detections, det_res = extract_fragments_from_image(image, model, imgsz, conf, device,
                                                                                      iou_threshold,
                                                                                      area_ratio_threshold,
@@ -274,11 +302,14 @@ def extract_fragments_and_get_json(image, model, imgsz=1024, conf=0.2, device="c
     return resp
 
 
-def extract_and_save_segments(image_path, model, output_dir, imgsz=1024, conf=0.2, device="cpu",
+def extract_and_save_segments(image_path, output_dir, model: YOLOv10 = None, imgsz=1024, conf=0.2, device="cpu",
                               iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
     """
     Extrae y guarda segmentos de una imagen utilizando un modelo YOLOv10, incluyendo la detección de espacios faltantes.
     """
+    if model is None:
+        model = get_model()
+
     image = cv2.imread(image_path)
     if image is None:
         print(f"No se pudo cargar la imagen: {image_path}")
@@ -350,15 +381,18 @@ def extract_and_save_segments(image_path, model, output_dir, imgsz=1024, conf=0.
         print(f"Segmento guardado: {output_filename}")
 
 
-def process_directory(input_dir, model, output_dir, **kwargs):
+def process_directory(input_dir, output_dir, model: YOLOv10 = None, **kwargs):
     """
     Procesa todas las imágenes en un directorio.
     """
+    if model is None:
+        model = get_model()
+
     for filename in os.listdir(input_dir):
         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
             image_path = os.path.join(input_dir, filename)
             print(f"Procesando imagen: {image_path}")
-            extract_and_save_segments(image_path, model, output_dir, **kwargs)
+            extract_and_save_segments(image_path, output_dir, model, **kwargs)
 
 
 def main():
@@ -373,7 +407,7 @@ def main():
     margin = 5  # Margen en píxeles
 
     model = YOLOv10(filepath)
-    process_directory(input_dir, model, output_dir,
+    process_directory(input_dir, output_dir, model,
                       iou_threshold=iou_threshold,
                       area_ratio_threshold=area_ratio_threshold,
                       margin=margin)
