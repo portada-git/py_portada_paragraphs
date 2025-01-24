@@ -122,9 +122,9 @@ def contains(edges_in_account: list, container: list, box: list, threshold, limi
                 dif = box[i] - limit_values[i] + margin
         else:
             if i in edges_in_account:
-                dif = container[i] - box[i] + margin
+                dif = container[i] - box[i] + min(margin, 0.8*(box[3]-box[1]))
             elif limit_values is not None:
-                dif = limit_values[i] - box[i] + margin
+                dif = limit_values[i] - box[i] + min(margin, 0.8*(box[3]-box[1]))
         ret = dif >= 0
         if not ret:
             break
@@ -385,7 +385,6 @@ SET_AREA_IN_EXISTING_SECTION = 0
 CREATE_SECTION_AND_SET_AREA = -1
 REFORM_EXISTING_SECTION_AND_SET_AREA= 1
 
-
 class MainLayout(StructuredSection):
     def __init__(self, page_boundary, w: int, h: int = 0, threshold=40, proposed_sections=None):
         super().__init__([0, 0, w, h], threshold, page_boundary=page_boundary)
@@ -428,10 +427,14 @@ class MainLayout(StructuredSection):
 
     def _has_area_similar_center_to_proposed_columns(self, writing_area_properties, proposed_section):
         if len(proposed_section['columns']) > 0:
-            margin = self.threshold + self.threshold
+            margin = 2 * self.threshold
             x1, y1, x2, y2 = writing_area_properties['area']
-            width_sibling = proposed_section['columns'][0][2] - proposed_section['columns'][0][0]
-            dif = abs((((x1 + x2) / 2) % width_sibling) - (width_sibling / 2)) - self.page_boundary[0]
+            dif = margin + 1
+            cent = (x1+x2)/2
+            for col in proposed_section['columns']:
+                d = abs(cent - (col[0] + col[2]) / 2)
+                if d < dif:
+                    dif = d
             ret = dif <= margin
         else:
             ret = False
@@ -561,13 +564,60 @@ class MainLayout(StructuredSection):
     #             self.sections[pos].bottom = (self.sections[pos].bottom + self.sections[pos+offset].top)//2
     #
 
-    # def search_action_and_position_for_unlocated_area(self, i, min_left, max_right, threshold):
-    #     pos = -1
-    #     action = -1
-    #     if self.unlocated_boxes[i]['is_single']:
-    #
-    #
-    #     return pos, action
+    def process_unlocated_area(self, unlocated_pos):
+        ret = False
+        pos = -1
+        status = -10
+        for i in range(len(self.sections)):
+            status = self.get_status_in_section(self.unlocated_boxes[unlocated_pos]['area'], i)
+            if status < 1:
+                pos = i
+                break
+        if status == -1:
+            if self.unlocated_boxes[unlocated_pos]['is_single']:
+                # inserir una nova secció
+                b = [self.page_boundary[0], self.unlocated_boxes[unlocated_pos]['area'][1], self.page_boundary[2], self.unlocated_boxes[unlocated_pos]['area'][3]]
+                section = SingleSection(self, b)
+                section.add_writing_area(self.unlocated_boxes[unlocated_pos])
+                self.sections.insert(pos, section)
+                ret = True
+        elif -1 < status < 0:
+            if self.unlocated_boxes[unlocated_pos]['is_single'] and (type(self.sections[pos]) is SingleSection or len(self.sections[pos].siblings)==1):
+                section = self.sections[pos] if type(self.sections[pos]) is SingleSection else self.sections[pos].siblings[0]
+                # si hi cap
+                section.top = self.unlocated_boxes[unlocated_pos]['area'][1]
+                if section.can_be_added( self.unlocated_boxes[unlocated_pos], True):
+                    section.add_writing_area(self.unlocated_boxes[unlocated_pos])
+                    section.writing_areas.sort(key=lambda x:x[1])
+                    ret = True
+        elif status == 0:
+            if self.unlocated_boxes[unlocated_pos]['is_single'] and (type(self.sections[pos]) is SingleSection or len(self.sections[pos].siblings)==1):
+                section = self.sections[pos] if type(self.sections[pos]) is SingleSection else self.sections[pos].siblings[0]
+                if section.can_be_added( self.unlocated_boxes[unlocated_pos], True):
+                    section.add_writing_area(self.unlocated_boxes[unlocated_pos])
+                    section.writing_areas.sort(key=lambda x:x[1])
+                    ret = True
+            # elif not self.unlocated_boxes[unlocated_pos]['is_single']:
+            #     if self.unlocated_boxes[unlocated_pos]['area'][2] -
+        return ret
+
+    def get_status_in_section(self, unlocated, spos):
+        hu = unlocated[3] - unlocated[1]
+        hs = self.sections[spos].bottom - self.sections[spos].top
+        hs_plus_hu =  hs + hu
+        dif = unlocated[3] - self.sections[spos].top
+        if dif <= 0:
+            status = -1
+        elif 0 < dif < hu:
+            status = dif / hu - 1
+        elif hu <= dif <= hs:
+            status = 0
+        elif hs < dif < hs_plus_hu:
+            status = (dif + hs) / hu
+        else:
+            status = 1
+        return status
+
 
     @staticmethod
     def build_lauoud_from_sections(page_boundary, sections, writing_area_list, w: int, h: int, threshold=None):
@@ -577,9 +627,21 @@ class MainLayout(StructuredSection):
 
         min_left = 100000
         max_right = 0
+
+        if page_boundary[0] > w * 0.15:
+            page_boundary[0] = threshold
+        if page_boundary[1] > h * 0.15:
+            page_boundary[1] = threshold
+        if page_boundary[2] < w * 0.85:
+            page_boundary[2] = w - threshold
+        if page_boundary[3] < h * 0.85:
+            page_boundary[3] = h - threshold
+
         for writing_area in writing_area_list:
-            a_left = max(writing_area[0], page_boundary[0])
-            a_right = min(writing_area[2], page_boundary[2])
+            if not contains([0,1,2,3], page_boundary, writing_area, main_layout.threshold):
+                continue
+            a_left = writing_area[0]
+            a_right = writing_area[2]
             if min_left > a_left:
                 min_left = a_left
             if max_right < a_right:
@@ -590,16 +652,11 @@ class MainLayout(StructuredSection):
             wa = get_writing_area_properties(writing_area_list, i, min_left, max_right, main_layout.threshold)
             main_layout.add_writing_area(wa)
 
-        # for section in main_layout.sections:
-        #     if type(section) is BigSectionOfSibling:
-        #         for column in section.siblings:
-        #             column.top = column.upper_fill_level
-        #             column.bottom = column.down_fill_level
-        #     section.top = section.upper_fill_level
-        #     section.bottom = section.down_fill_level
+        for i in range(len(main_layout.unlocated_boxes)-1, -1, -1):
+            # buscar la secció prèvia a l'àrea
+            if main_layout.process_unlocated_area(i):
+                main_layout.unlocated_boxes.pop(i)
 
-
-        # for i in range(len(main_layout.unlocated_boxes)):
         #     pos, action = main_layout.search_action_and_position_for_unlocated_area(i, min_left, max_right, main_layout.threshold)
         #     if action == SET_AREA_IN_EXISTING_SECTION:
         #         # afegir a la secció de la posició pos
@@ -675,19 +732,24 @@ class BigSectionOfSibling(StructuredSection):
         return self.sections
 
     def _has_area_similar_center(self, writing_area_properties):
-        margin = self.threshold + self.threshold + self.threshold
+        margin = self.threshold
         x1, y1, x2, y2 = writing_area_properties['area']
-        dif = abs((((x1 + x2) / 2) % self.width_sibling) - (self.width_sibling / 2)) - self.page_boundary[0]
+        dif = margin + 1
+        cent = (x1 + x2) / 2
+        for sibling in self.siblings:
+            d = abs( cent - sibling.center)
+            if d < dif:
+                dif = d
         return dif <= margin
 
     def _has_area_similar_start(self, writing_area_properties):
-        margin = self.threshold + self.threshold + self.threshold
+        margin = self.threshold + self.threshold
         x1, y1, x2, y2 = writing_area_properties['area']
         dif = abs(self.width_sibling - x1) % self.width_sibling
         return dif <= margin
 
     def _has_area_similar_width(self, writing_area_properties):
-        margin = self.threshold + self.threshold + self.threshold
+        margin = self.threshold + self.threshold
         if self.width_sibling == -1:
             dif = 0
         else:
@@ -809,17 +871,33 @@ class SingleSection(AbstractSection):
         self._len = 0
         self._suma_center = 0
         self._is_column = type(container) is BigSectionOfSibling
+        self._writing_areas = []
 
     @property
     def center(self):
-        return self._suma_center / self._len
+        if self._len == 0:
+            ret = (self.top + self.right) / 2
+        else:
+            ret = self._suma_center / self._len
+        return ret
 
-    def can_be_added(self, writing_area_properties):
+    @property
+    def writing_areas(self):
+        return self._writing_areas
+
+    def can_be_added(self, writing_area_properties, verify_space=False):
         result = writing_area_properties['is_single'] == (not self._is_column)
         edges = [0, 1, 2]
         if not self.is_bottom_expandable:
             edges.append(3)
         result = result and contains(edges, self.coordinates, writing_area_properties['area'], self.threshold)
+        if result and verify_space:
+            v = True
+            for wa in self.writing_areas:
+                if overlap_vertically(wa, writing_area_properties['area'], self.threshold):
+                    v = False
+                    break
+            result = result and v
         return result
 
     def add_writing_area(self, writing_area_properties):
@@ -836,6 +914,7 @@ class SingleSection(AbstractSection):
             self.left = x1
         if x2 > self.right:
             self.right = x2
+        self._writing_areas.append(writing_area_properties['area'])
 
     def get_single_sections_as_boxes(self, boxes=[]):
         boxes.append(self.coordinates)
