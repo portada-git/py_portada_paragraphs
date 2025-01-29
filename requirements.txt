@@ -3,3 +3,5 @@ numpy < 2
 doclayout-YOLO @ git+https://github.com/opendatalab/DocLayout-YOLO.git
 huggingface_hub
 py_yolo_dla @ git+https://github.com/portada-git/py_yolo_dla#egg=py_yolo_dla
+urllib3
+ultralytics

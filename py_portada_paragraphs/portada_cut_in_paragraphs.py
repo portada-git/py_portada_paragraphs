@@ -1,12 +1,8 @@
 from pathlib import Path
-
-from fontTools.varLib.iup import iup_delta
-
-from py_portada_paragraphs import raw_predictions, extract_fragments_and_get_json, MainLayout, get_model as get_paragraph_model
+from py_portada_paragraphs import raw_predictions, extract_fragments_and_get_json, MainLayout, get_paragraph_model
 import cv2
-#from doclayout_yolo import YOLOv10
 import os
-from py_yolo_dla import get_sections_and_page, get_model as get_layout_model
+from .py_yolo_layout import get_sections_and_page, get_model as get_layout_model
 
 
 class PortadaParagraphCutter(object):
@@ -55,7 +51,6 @@ class PortadaParagraphCutter(object):
     @yolo_paragraph_model_path.setter
     def yolo_paragraph_model_path(self, val):
         self._yolo_paragraph_model_path = val
-        # self._yolo_paragraph_model = YOLOv10(self._yolo_paragraph_model_path)
         self._yolo_paragraph_model = get_paragraph_model(self._yolo_paragraph_model_path)
 
     @property

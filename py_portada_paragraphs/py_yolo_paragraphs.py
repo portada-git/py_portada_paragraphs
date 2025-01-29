@@ -1,9 +1,8 @@
-from typing import final
-
 import cv2
 import numpy as np
 from doclayout_yolo import YOLOv10
 import os
+from .py_portada_utility_for_layout import  calculate_iou
 
 
 def create_output_directory(directory):
@@ -14,29 +13,6 @@ def create_output_directory(directory):
     """
     if not os.path.exists(directory):
         os.makedirs(directory)
-
-
-def calculate_iou(box1, box2):
-    """
-    Calcula la Intersección sobre Unión (IoU) entre dos cajas delimitadoras.
-    Args:
-        container, box (list): Coordenadas de las cajas en formato [x1, y1, x2, y2].
-    Returns:
-        tuple: (IoU, área de intersección, área de container, área de box)
-    """
-    x1 = max(box1[0], box2[0])
-    y1 = max(box1[1], box2[1])
-    x2 = min(box1[2], box2[2])
-    y2 = min(box1[3], box2[3])
-
-    intersection = max(0, x2 - x1) * max(0, y2 - y1)
-    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
-    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
-    union = area1 + area2 - intersection
-
-    iou = intersection / union if union > 0 else 0
-
-    return iou, intersection, area1, area2
 
 
 def remove_overlapping_segments(detections, iou_threshold=0.5, area_ratio_threshold=0.8):
