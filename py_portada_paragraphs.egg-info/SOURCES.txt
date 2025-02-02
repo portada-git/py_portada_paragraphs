@@ -5,6 +5,8 @@ setup.py
 py_portada_paragraphs/__init__.py
 py_portada_paragraphs/layout_structure.py
 py_portada_paragraphs/portada_cut_in_paragraphs.py
+py_portada_paragraphs/py_portada_utility_for_layout.py
+py_portada_paragraphs/py_yolo_layout.py
 py_portada_paragraphs/py_yolo_paragraphs.py
 py_portada_paragraphs.egg-info/PKG-INFO
 py_portada_paragraphs.egg-info/SOURCES.txt

@@ -1,6 +1,6 @@
-Metadata-Version: 2.1
-Name: py-portada-paragraphs
-Version: 0.0.3
+Metadata-Version: 2.2
+Name: py_portada_paragraphs
+Version: 0.0.4
 Summary: Process to get paragraphs from documment images using YOLO model in PortADa project
 Home-page: https://github.com/portada-git/py_portada_paragraphs
 Author: PortADa team
@@ -8,3 +8,16 @@ Author-email: jcbportada@gmail.com
 License: MIT
 Requires-Python: >=3.9
 License-File: LICENSE
+Requires-Dist: opencv-python<4.9,>=4.8
+Requires-Dist: doclayout-YOLO@ git+https://github.com/opendatalab/DocLayout-YOLO.git
+Requires-Dist: numpy<2
+Requires-Dist: huggingface_hub
+Requires-Dist: urllib3
+Requires-Dist: ultralytics
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: license
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

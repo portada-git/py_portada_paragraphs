@@ -138,7 +138,8 @@ class PortadaParagraphCutter(object):
         blocks.sort(key=lambda x: x[1] * 10000 + x[0])
 
         layout = MainLayout.build_lauoud_from_sections(page, sections, blocks, self.image.shape[1],
-                                                       self.image.shape[0], 30)
+                                                       self.image.shape[0], 30, image=self.image,
+                                                       lmodel=self.yolo_layout_model)
         return layout
 
     def get_columns(self, conf=0.1, iou_threshold=None, area_ratio_threshold=None):

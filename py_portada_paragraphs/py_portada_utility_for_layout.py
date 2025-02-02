@@ -119,6 +119,9 @@ def overlap_vertically(box1: list, box2: list, threshold: int):
         ret = ((min(b1y[1], b2y[1]) - max(b1y[0], b2y[0])) / min(b1y[1] - b1y[0], b2y[1] - b2y[0])) >= 0.4
     return ret
 
+def is_similar_distance(x11, x12, x21, x22, threshold):
+    margin = threshold
+    return abs(x12 - x11 - x22 +x21) - margin < 0
 
 def contains(edges_in_account: list, container: list, box: list, threshold, limit_values=None):
     """
@@ -139,14 +142,14 @@ def contains(edges_in_account: list, container: list, box: list, threshold, limi
         dif = 0
         if i < 2:
             if i in edges_in_account:
-                dif = box[i] - container[i] + margin
+                dif = box[i] - container[i] + (margin if i==0 else min(margin, 0.8*(box[3]-box[1])))
             elif limit_values is not None:
-                dif = box[i] - limit_values[i] + margin
+                dif = box[i] - limit_values[i] + (margin if i==0 else min(margin, 0.8*(box[3]-box[1])))
         else:
             if i in edges_in_account:
-                dif = container[i] - box[i] + min(margin, 0.8*(box[3]-box[1]))
+                dif = container[i] - box[i] + (margin if i==2 else min(margin, 0.8*(box[3]-box[1])))
             elif limit_values is not None:
-                dif = limit_values[i] - box[i] + min(margin, 0.8*(box[3]-box[1]))
+                dif = limit_values[i] - box[i] + (margin if i==2 else min(margin, 0.8*(box[3]-box[1])))
         ret = dif >= 0
         if not ret:
             break

@@ -3,6 +3,7 @@ from ultralytics import YOLO
 import numpy as np
 from .py_portada_utility_for_layout import contains
 
+
 def calculate_overlap_vectorized(box, boxes):
     """
     Calcula el porcentaje de superposición entre una caja y un conjunto de cajas de manera vectorizada.
@@ -25,6 +26,7 @@ def calculate_overlap_vectorized(box, boxes):
 
     overlap_percentage = intersection_area / np.minimum(box_area, boxes_area)
     return overlap_percentage
+
 
 def _get_non_overlapping_indexes(boxes):
     areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
@@ -51,18 +53,21 @@ def _get_non_overlapping_indexes(boxes):
     keep_indices = list(set(range(len(boxes))) - boxes_to_remove)
     return keep_indices
 
+
 def remove_overlapping_boxes(p_boxes):
     boxes = np.array(p_boxes)
     keep_indices = _get_non_overlapping_indexes(boxes)
     return list(boxes[keep_indices])
+
 
 def get_tagged_boxes(boxes, classes, confidences, names):
     tagged_boxes = []
     for box, cls, conf in zip(boxes, classes, confidences):
         class_name = names[int(cls)]
         x1, y1, x2, y2 = map(int, box.tolist())
-        tagged_boxes.append({'box':[x1, y1, x2, y2], 'class_name':class_name, 'conf':conf})
+        tagged_boxes.append({'box': [x1, y1, x2, y2], 'class_name': class_name, 'conf': conf})
     return tagged_boxes
+
 
 def get_boundaries_for_class(boxes, classes, names, class_name_list_to_include=None, class_name_list_to_exclude=None):
     if class_name_list_to_exclude is None:
@@ -81,13 +86,14 @@ def get_boundaries_for_class(boxes, classes, names, class_name_list_to_include=N
             x1, y1, x2, y2 = map(int, box.tolist())
             boundaries.append([x1, y1, x2, y2])
             class_names.append(class_name)
-    if len(boundaries)>0:
+    if len(boundaries) > 0:
         boundaries = np.array(boundaries)
         class_names = np.array(class_names)
         index_to_keep = _get_non_overlapping_indexes(boundaries)
         boundaries = list(boundaries[index_to_keep])
         class_names = list(class_names[index_to_keep])
     return boundaries, class_names
+
 
 def get_page_boundaries(boxes, classes, names, guess_page):
     max_page_area = 0
@@ -103,6 +109,7 @@ def get_page_boundaries(boxes, classes, names, guess_page):
     if max_page is None:
         max_page = guess_page
     return max_page
+
 
 # def get_tagged_boxes_by_class(tagged_boxes, names, class_name_list_to_include=None, class_name_list_to_exclude=None):
 #     if class_name_list_to_exclude is None:
@@ -136,7 +143,6 @@ def get_page_boundaries(boxes, classes, names, guess_page):
 #     return
 
 
-
 def classify_boxes_by_container(boxes, containers, max_container=None, container_order_key=1, box_order_key=0):
     if max_container is None:
         max_container = [0, 0, 100000, 100000]
@@ -149,7 +155,7 @@ def classify_boxes_by_container(boxes, containers, max_container=None, container
         container_boxes = []
         if len(boxes) > 0:
             for i, box in enumerate(boxes):
-                if contains([0,1,2,3], container, box, 30):
+                if contains([0, 1, 2, 3], container, box, 30):
                     container_boxes.append(box)
                     to_remove.add(i)
         result.append({
@@ -160,11 +166,13 @@ def classify_boxes_by_container(boxes, containers, max_container=None, container
         boxes.pop(index)
     return result
 
+
 def get_model(fpath=None):
     if fpath is None:
         p = os.path.abspath(os.path.dirname(__file__))
         fpath = f"{p}/modelo/yolo11x-layout-882-rtx-6000-ada-48gb.pt"
     return YOLO(fpath)
+
 
 def get_annotated_prediction(image: np.array, model):
     if model is None:
@@ -181,6 +189,7 @@ def get_annotated_prediction(image: np.array, model):
     for i in range(len(boxes)):
         ret.append({'box': boxes[i], 'class_name': names[classes[i]]})
     return ret
+
 
 def redefine_sections(sections):
     to_remove = set()
@@ -201,7 +210,6 @@ def redefine_sections(sections):
         result.append(section)
 
     return result
-
 
 
 def get_sections_and_page(image: np.array, model=None):
@@ -235,7 +243,10 @@ def get_sections_and_page(image: np.array, model=None):
     section_boxes, _ = get_boundaries_for_class(boxes, classes, names, ['seccion'])
     column_boxes, _ = get_boundaries_for_class(boxes, classes, names, ['columna'])
     block_boxes, _ = get_boundaries_for_class(boxes, classes, names, ['bloque'])
-    other_boxes, other_boxes_class_names = get_boundaries_for_class(boxes, classes, names, class_name_list_to_exclude=['columna', 'seccion', 'encabezado',  'pagina', 'bloque'])
+    other_boxes, other_boxes_class_names = get_boundaries_for_class(boxes, classes, names,
+                                                                    class_name_list_to_exclude=['columna', 'seccion',
+                                                                                                'encabezado', 'pagina',
+                                                                                                'bloque'])
     page_box = get_page_boundaries(boxes, classes, names, guess_page)
 
     sorted_sections = classify_boxes_by_container(column_boxes, section_boxes, guess_page, 1, 0)
