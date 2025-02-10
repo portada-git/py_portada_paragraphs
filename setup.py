@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='py_portada_paragraphs',
-    version='0.0.4',
+    version='0.0.5',
     description='Process to get paragraphs from documment images using YOLO model in PortADa project',
     author='PortADa team',
     author_email='jcbportada@gmail.com',
@@ -12,7 +12,7 @@ setup(name='py_portada_paragraphs',
 	'py_yolo_paragraphs', 
 	'layout_structure', 
 	'portada_cut_in_paragraphs', 
-	'py_portada_util_for_layout',
+	'py_portada_utility_for_layout',
 	'py_yolo_layout'
     ],
     install_requires=[

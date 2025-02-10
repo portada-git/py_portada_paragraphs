@@ -116,7 +116,10 @@ def overlap_vertically(box1: list, box2: list, threshold: int):
 
     ret = min(b1y[1], b2y[1]) - max(b1y[0], b2y[0]) - min(threshold, b1y[1] - b1y[0], b2y[1] - b2y[0]) >= 0
     if not ret and min(b1y[1] - b1y[0], b2y[1] - b2y[0]) < (threshold+threshold):
-        ret = ((min(b1y[1], b2y[1]) - max(b1y[0], b2y[0])) / min(b1y[1] - b1y[0], b2y[1] - b2y[0])) >= 0.4
+        try:
+            ret = ((min(b1y[1], b2y[1]) - max(b1y[0], b2y[0])) / min(b1y[1] - b1y[0], b2y[1] - b2y[0])) >= 0.4
+        except ZeroDivisionError:
+            ret = False
     return ret
 
 def is_similar_distance(x11, x12, x21, x22, threshold):
@@ -154,3 +157,57 @@ def contains(edges_in_account: list, container: list, box: list, threshold, limi
         if not ret:
             break
     return ret
+
+
+VERTICAL_POSITIONING = 1
+HORIZONTAL_POSITIONING = 0
+
+def get_boxes_non_overlapping_positioning(ori, rel_box, fix_box, threshold):
+    v = 0
+    r = 0
+    if ori == VERTICAL_POSITIONING:
+        vok = not overlap_vertically(rel_box, fix_box, threshold)
+        edges = [1,3]
+    else:
+        vok = not overlap_horizontally(rel_box, fix_box, threshold)
+        edges = [0,2]
+    if vok:
+        r = _get_relative_loc_in_boxes(edges, rel_box, fix_box, True)
+        if r < 0:
+            v = fix_box[edges[0]] - rel_box[edges[1]]
+        else:
+            v = rel_box[edges[0]] - fix_box[edges[1]]
+    return vok, r, v
+
+
+def _get_relative_loc_in_boxes(edges, rel_box, fix_box, min=True):
+    hr = rel_box[edges[1]] - rel_box[edges[0]]
+    hf = fix_box[edges[1]] - fix_box[edges[0]]
+    hf_plus_hr = hf + hr
+    if min:
+        dif = rel_box[edges[1]] - fix_box[edges[0]]
+    else:
+        dif = fix_box[edges[1]] - rel_box[edges[0]]
+    if dif <= 0:
+        status = -1
+    elif 0 < dif < hr:
+        status = dif / hr - 1
+    elif hr <= dif <= hf:
+        status = 0
+    elif hf < dif < hf_plus_hr:
+        status = (dif - hf) / hr
+    else:
+        status = 1
+    return status
+
+def get_relative_top_loc_in_boxes(rel_box, fix_box):
+    return _get_relative_loc_in_boxes([1,3], rel_box, fix_box, True)
+
+def get_relative_bottom_loc_in_boxes(rel_box, fix_box):
+    return _get_relative_loc_in_boxes([1,3], rel_box, fix_box, False)
+
+def get_relative_left_loc_in_boxes(rel_box, fix_box):
+    return _get_relative_loc_in_boxes([0,2], rel_box, fix_box, True)
+
+def get_relative_right_loc_in_boxes(rel_box, fix_box):
+    return _get_relative_loc_in_boxes([0,2], rel_box, fix_box, False)

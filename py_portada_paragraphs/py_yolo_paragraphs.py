@@ -182,6 +182,8 @@ def cajas_faltantes(imagen, cajas, umbral=98, margen=0):
 
     return segmentos
 
+## def resize_detections(detections):
+
 
 def raw_predictions(image, model: YOLOv10 = None, imgsz=1024, conf=0.2, device="cpu",
                     iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
@@ -236,6 +238,8 @@ def extract_fragments_from_image(image, model: YOLOv10 = None, imgsz=1024, conf=
 
     # **Nuevo código para eliminar detecciones completamente contenidas dentro de otras**
     final_detections = remove_completely_overlapped_detections(final_detections)
+
+    ## TODO final_detections = resize_detections(final_detections)
 
     # Ordenar las detecciones finales por coordenada y
     final_detections.sort(key=lambda x: x[1])

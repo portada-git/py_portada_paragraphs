@@ -1,6 +1,6 @@
 layout_structure
 portada_cut_in_paragraphs
 py_portada_paragraphs
-py_portada_util_for_layout
+py_portada_utility_for_layout
 py_yolo_layout
 py_yolo_paragraphs

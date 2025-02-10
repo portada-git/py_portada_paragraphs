@@ -144,7 +144,7 @@ class PortadaParagraphCutter(object):
 
     def get_columns(self, conf=0.1, iou_threshold=None, area_ratio_threshold=None):
         layout = self.get_layout(conf, iou_threshold, area_ratio_threshold)
-        boxes = layout.get_single_sections_as_boxes()
+        boxes = layout.get_single_sections_as_boxes(5)
         boxes.sort(key=lambda x: x[1] * 10000 + x[0])
         return boxes
 
