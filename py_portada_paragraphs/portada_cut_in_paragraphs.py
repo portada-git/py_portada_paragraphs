@@ -125,6 +125,20 @@ class PortadaParagraphCutter(object):
 
         return boxes
 
+    @staticmethod
+    def draw_annotated_image_by_boxes(blocks: list, image: np.ndarray, line_color=(0, 0, 255),
+                                      text_color=(255, 0, 0)) -> np.ndarray:
+        image_with_blocks = image.copy()
+        img_height, img_width, _ = image.shape
+        # Draw rectangles and add numbers for each block
+        for i, block in enumerate(blocks, start=1):
+            x1, y1, x2, y2 = block
+            cv2.rectangle(image_with_blocks, (x1, y1), (x2, y2), line_color, 2)
+            cv2.putText(image_with_blocks, str(i), (x1, y1),
+                        cv2.FONT_HERSHEY_SIMPLEX, 2, text_color, 2)
+
+        return image_with_blocks
+
     def get_layout(self, conf=0.1, iou_threshold=None, area_ratio_threshold=None):
         self.__verify_image()
         if iou_threshold is None:
