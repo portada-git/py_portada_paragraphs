@@ -3,6 +3,7 @@ from py_portada_paragraphs import raw_predictions, extract_fragments_and_get_jso
 import cv2
 import os
 from .py_yolo_layout import get_sections_and_page, get_model as get_layout_model
+import numpy as np
 
 
 class PortadaParagraphCutter(object):
