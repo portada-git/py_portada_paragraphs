@@ -1324,7 +1324,7 @@ class MainLayout(StructuredSection):
         main_layout._resize_right_sections()
         main_layout._resize_bottom_sections()
         #llenar gaps i ajustar medidas
-        # main_layout._fill_vertical_gaps_and_resize()
+        main_layout._fill_vertical_gaps_and_resize()
 
         main_layout.sort_content(True)
         return main_layout

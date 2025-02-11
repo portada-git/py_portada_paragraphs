@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='py_portada_paragraphs',
-    version='0.0.10',
+    version='0.0.11',
     description='Process to get paragraphs from documment images using YOLO model in PortADa project',
     author='PortADa team',
     author_email='jcbportada@gmail.com',
