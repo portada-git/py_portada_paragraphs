@@ -117,7 +117,7 @@ def overlap_vertically(box1: list, box2: list, threshold: int):
     ret = min(b1y[1], b2y[1]) - max(b1y[0], b2y[0]) - min(threshold, b1y[1] - b1y[0], b2y[1] - b2y[0]) >= 0
     if not ret and min(b1y[1] - b1y[0], b2y[1] - b2y[0]) < (threshold+threshold):
         try:
-            ret = ((min(b1y[1], b2y[1]) - max(b1y[0], b2y[0])) / min(b1y[1] - b1y[0], b2y[1] - b2y[0])) >= 0.4
+            ret = ((min(b1y[1], b2y[1]) - max(b1y[0], b2y[0])) / min(b1y[1] - b1y[0] , b2y[1] - b2y[0])) >= 0.4
         except ZeroDivisionError:
             ret = False
     return ret

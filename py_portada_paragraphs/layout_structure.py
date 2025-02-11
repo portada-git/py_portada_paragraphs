@@ -583,25 +583,57 @@ class MainLayout(StructuredSection):
             self.add_new_section(s)
 
     def _resize_left_sections(self):
+        for section in self.left_sections:
+            if section.left < self.page_boundary[0]:
+                self.page_boundary[0] = section.left
+            if type(section) is BigSectionOfSibling:
+                for col in section.siblings:
+                    if col.left > self.page_boundary[0]:
+                        self.page_boundary[0] = col.left
+
         for i, section in enumerate(self.left_sections):
             section.left = self.page_boundary[0]
             if type(section) is BigSectionOfSibling:
                 section._resize_left_sections()
 
     def _resize_right_sections(self):
-        for i, section in enumerate(self.right_sections):
+        for section in self.right_sections:
+            if section.right > self.page_boundary[2]:
+                self.page_boundary[2] = section.right
+            if type(section) is BigSectionOfSibling:
+                for col in section.siblings:
+                    if col.right > self.page_boundary[2]:
+                        self.page_boundary[2] = col.right
+
+        for section in self.right_sections:
             section.right = self.page_boundary[2]
             if type(section) is BigSectionOfSibling:
                 section._resize_right_sections()
 
     def _resize_top_sections(self):
-        for i, section in enumerate(self.top_sections):
+        for section in self.top_sections:
+            if section.top < self.page_boundary[1]:
+                self.page_boundary[1] = section.top
+            if type(section) is BigSectionOfSibling:
+                for col in section.siblings:
+                    if col.top > self.page_boundary[1]:
+                        self.page_boundary[1] = col.top
+
+        for section in self.top_sections:
             section.top = self.page_boundary[1]
             if type(section) is BigSectionOfSibling:
                 section._resize_top_sections()
 
     def _resize_bottom_sections(self):
-        for i, section in enumerate(self.bottom_sections):
+        for section in self.bottom_sections:
+            if section.bottom > self.page_boundary[3]:
+                self.page_boundary[3] = section.bottom
+            if type(section) is BigSectionOfSibling:
+                for col in section.siblings:
+                    if col.bottom > self.page_boundary[3]:
+                        self.page_boundary[3] = col.bottom
+
+        for section in self.bottom_sections:
             section.bottom = self.page_boundary[3]
             if type(section) is BigSectionOfSibling:
                 section._resize_bottom_sections()
@@ -741,9 +773,14 @@ class MainLayout(StructuredSection):
                                                                self.sections[pos],
                                                                UnlocatedBoxes.INSIDE_OF_SECTION_POS, w_comparison)
                     else:
-                        self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos],
-                                                               self.sections[pos].siblings[c_pos],
-                                                               UnlocatedBoxes.INSIDE_OF_SECTION_POS, w_comparison)
+                        if c_pos > -1:
+                            self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos],
+                                                                   self.sections[pos].siblings[c_pos],
+                                                                   UnlocatedBoxes.INSIDE_OF_SECTION_POS, w_comparison)
+                        else:
+                            self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos],
+                                                                   self.sections[pos],
+                                                                   UnlocatedBoxes.INSIDE_OF_SECTION_POS, w_comparison)
                     ret = True
                 else:
                     found = False
@@ -876,8 +913,11 @@ class MainLayout(StructuredSection):
                 # # TODO: Es troba al final. Cal veure con es resol
                 # pass
             else:
+                self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos],
+                                                       self.sections[len(self.sections)-1],
+                                                       UnlocatedBoxes.NEXT_OF_SECTION_POS)
+                #OLD
                 # TODO: something was wrong. WHat?
-                raise "Error status is out of range"
         return ret
 
     def get_status_in_section(self, unlocated, spos):
@@ -1284,7 +1324,7 @@ class MainLayout(StructuredSection):
         main_layout._resize_right_sections()
         main_layout._resize_bottom_sections()
         #llenar gaps i ajustar medidas
-        main_layout._fill_vertical_gaps_and_resize()
+        # main_layout._fill_vertical_gaps_and_resize()
 
         main_layout.sort_content(True)
         return main_layout
