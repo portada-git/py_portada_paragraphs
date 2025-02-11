@@ -787,137 +787,16 @@ class MainLayout(StructuredSection):
                     if not only_width and pos+1 == len(self.sections):
                         pos -= 1
                         only_width = True
-                # OLD
-                # if self.list_of_unlocated_boxes[unlocated_pos]['is_single']:
-                #     if (type(self.sections[pos]) is SingleSection or len(self.sections[pos].siblings) == 1):
-                #         section = self.sections[pos] if type(self.sections[pos]) is SingleSection else \
-                #         self.sections[pos].siblings[0]
-                #         if section.can_be_added(self.list_of_unlocated_boxes[unlocated_pos], True):
-                #             section.add_writing_area(self.list_of_unlocated_boxes[unlocated_pos])
-                #             section.writing_areas.sort(key=lambda x: x[1])
-                #             ret = True
-                #     else:
-                #         # Contradicció. (if search_sibling > -1 => pertany a una columna else cal veure com es resol)
-                #         cpos = -1
-                #         for i, col in enumerate(self.sections[pos].siblings):
-                #             if col.fits_vertically(self.list_of_unlocated_boxes[unlocated_pos]['area']):
-                #                 cpos = i
-                #                 break
-                #
-                #         cpos = self.sections[pos].search_sibling(self.list_of_unlocated_boxes[unlocated_pos])
-                #         if cpos > -1:
-                #             self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos], 0,
-                #                                                    self.sections[pos].siblings[cpos])
-                #             ret = True
-                #         elif self.sections[pos]._has_area_similar_width(self.list_of_unlocated_boxes[unlocated_pos]):
-                #             # possible error fa la mateixa mida de la columna. Verifiquem si hi cap
-                #             cp = -1
-                #             for i, col in enumerate(self.sections[pos].siblings):
-                #                 if col.fits_vertically(self.list_of_unlocated_boxes[unlocated_pos]['area']):
-                #                     cp = i
-                #                     break
-                #             if cp > -1:
-                #                 # afegim a la columna
-                #                 self.list_of_unlocated_boxes[unlocated_pos]['is_single'] = False
-                #                 self.sections[pos].add_writing_area(self.list_of_unlocated_boxes[unlocated_pos])
-                #                 ret = True
-                #             else:
-                #                 # TODO: Contradicció. Cal veure con es resol
-                #                 pass
-                #         else:
-                #             # trencar la secció existent e inserir la nova
-                #             f, cp1, cp2 = self.sections[pos].search_siblings_to_cut_for_bigger_section(
-                #                 self.list_of_unlocated_boxes[unlocated_pos])
-                #             if f:
-                #                 if cp1 == 0 and cp2 + 1 == len(self.sections[pos].siblings):
-                #                     # convertir la secció pos en dues i inserir entre elles una nova secció
-                #                     self.sections[pos].cut(self.list_of_unlocated_boxes[unlocated_pos]['area'])
-                #                     if pos + 1 < len(self.sections) and (
-                #                             type(self.sections[pos + 1]) is SingleSection or len(
-                #                         self.sections[pos + 1].siblings) == 1):
-                #                         new_section = self.sections[pos + 1]
-                #                         new_section.top = self.list_of_unlocated_boxes[unlocated_pos]['area'][1]
-                #                     else:
-                #                         new_section = SingleSection(self,
-                #                                                     self.list_of_unlocated_boxes[unlocated_pos]['area'])
-                #                         self.add_new_section(new_section)
-                #                     new_section.add_writing_area(self.list_of_unlocated_boxes[unlocated_pos])
-                #                     new_section.sort_content()
-                #                     self.sort_content()
-                #                 else:
-                #                     # crear una nova secció i bloquejar la posició de la caixa a col·locar
-                #                     for i in range(cp1, cp2):
-                #                         (self.sections[pos].siblings[i].append([
-                #                             self.sections[pos].siblings[i].left,
-                #                             self.list_of_unlocated_boxes[unlocated_pos]['area'][1],
-                #                             self.sections[pos].siblings[i].right,
-                #                             self.list_of_unlocated_boxes[unlocated_pos]['area'][3]]))
-                #                         self.sections[pos].siblings[i].sort_content()
-                #                     new_section = BigSectionOfSibling(self, self.list_of_unlocated_boxes[unlocated_pos][
-                #                         'area'])
-                #                     new_column = SingleSection(new_section, new_section.coordinates)
-                #                     new_column.add_writing_area(self.list_of_unlocated_boxes[unlocated_pos])
-                #                     new_section.add_new_section(new_column)
-                #                     self.add_new_section(new_section)
-                #                     self.sort_content()
-                #                 ret = True
-                #             else:
-                #                 # TODO: Contradicció.es crea una nova secció
-                #                 pass
-                # else:
-                #     if type(self.sections[pos]) is SingleSection:
-                #         # TODO: Contradicció. Cal veure con es resol
-                #         pass
-                #     elif type(self.sections[pos]) is BigSectionOfSibling:
-                #         CASE sibling area in sibling section
-                #         # TODO: agrupem per columnes
-                #         cpos = self.sections[pos].search_sibling(self.list_of_unlocated_boxes[unlocated_pos])
-                #         if cpos > -1:
-                #             self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos], 0,
-                #                                                    self.sections[pos].siblings[cpos])
-                #             ret = True
-                #         elif status == 0:
-                #             for i, col in enumerate(self.sections[pos].siblings):
-                #                 if col.right > self.list_of_unlocated_boxes[unlocated_pos]['area'][0] + self.threshold:
-                #                     cpos = i
-                #                     break
-                #             if cpos > -1:
-                #                 if is_similar_distance(self.list_of_unlocated_boxes[unlocated_pos]['area'][0],
-                #                                        self.list_of_unlocated_boxes[unlocated_pos]['area'][2],
-                #                                        self.sections[pos].siblings[cpos].left,
-                #                                        self.sections[pos].siblings[cpos].right, self.threshold):
-                #                     # force addition
-                #                     self.sections[pos].siblings[cpos].writing_areas.append(
-                #                         self.list_of_unlocated_boxes[unlocated_pos]['area'])
-                #                     self.sort_content()
-                #                 # else:
-                #                 # new section
-                #                 found = True
-                #
-                #         else:
-                #             found = False
-                #         # for sp in self.sections[pos].siblings:
-                #         #     if (contains([0,2], sp.coordinates, self.unlocated_boxes[unlocated_pos]['area'],
-                #         #                  self.threshold*2)
-                #         #             and is_similar_distance(sp.left, sp.right, self.unlocated_boxes[unlocated_pos]['area'][0],
-                #         #                                     self.unlocated_boxes[unlocated_pos]['area'][2], (sp.right-sp.left)*0.45)
-                #         #             and sp.fits_vertically(self.unlocated_boxes[unlocated_pos]['area'])):
-                #         #         sp.writing_areas.append(self.unlocated_boxes[unlocated_pos]['area'])
-                #         #         sp.writing_areas.sort(key=lambda x: x[1])
-                #         #         ret = True
             elif 0.5 <= status <= 1 and pos > -1:
                 self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos],
                                                        self.sections[pos],
                                                        UnlocatedBoxes.NEXT_OF_SECTION_POS)
-                #OLD
-                # # TODO: Es troba al final. Cal veure con es resol
-                # pass
+                ret = True
             else:
                 self.unlocated_boxes.set_unlocated_box(self.list_of_unlocated_boxes[unlocated_pos],
                                                        self.sections[len(self.sections)-1],
                                                        UnlocatedBoxes.NEXT_OF_SECTION_POS)
-                #OLD
-                # TODO: something was wrong. WHat?
+                ret = True
         return ret
 
     def get_status_in_section(self, unlocated, spos):
@@ -1263,7 +1142,90 @@ class MainLayout(StructuredSection):
                 to_locate.append(unloc_wa['area'])
                 to_locate_properties.append(unloc_wa)
             for i, wa in enumerate(to_locate):
-                self.list_of_unlocated_boxes.append(to_locate_properties[i])
+                if type(unlocated_box['referred_section'].section_container) is BigSectionOfSibling:
+                    section = unlocated_box['referred_section'].section_container
+                else:
+                    section = unlocated_box['referred_section']
+                s = self.sections.index(section)
+                min_left = section.left
+                max_right = section.right
+
+                new_section = False
+                # wap = get_writing_area_properties(to_locate, i, min_left, max_right, self.threshold)
+                if to_locate_properties[i]['is_single']:
+                    if ((type(self.sections[s]) is SingleSection or len(self.sections[s].siblings) == 1)
+                            and self.sections[s].can_be_added(to_locate_properties[i], only_width=True)):
+                        if self.sections[s].bottom < to_locate[i][3]:
+                            self.sections[s].bottom = to_locate[i][3]
+                        self.sections[s].add_writing_area(to_locate_properties[i])
+                    elif s < len(self.sections)-1 and (
+                            (type(self.sections[s + 1]) is SingleSection or len(self.sections[s + 1].siblings) == 1)
+                            and self.sections[s + 1].can_be_added(to_locate_properties[i], only_width=True)):
+                        if self.sections[s + 1].top > to_locate[i][1]:
+                            self.sections[s + 1].top = to_locate[i][1]
+                        self.sections[s + 1].add_writing_area(to_locate_properties[i])
+                    else:
+                        new_section = True
+                else:
+                    if type(self.sections[s]) is BigSectionOfSibling:
+                        if self.sections[s].can_be_added(to_locate_properties[i], only_width=True):
+                            if self.sections[s].bottom > to_locate[i][3]:
+                                self.sections[s].bottom = to_locate[i][3]
+                            self.sections[s].add_writing_area(to_locate_properties[i])
+                        elif self.sections[s].can_be_inserted_a_column_for(to_locate_properties[i]):
+                            # insert
+                            section = SingleSection(self.sections[s], to_locate[i])
+                            section.add_writing_area(to_locate_properties[i])
+                            self.sections[s].add_new_section(section)
+                            self.sections[s].sort_content()
+                        elif to_locate[i][3] - to_locate[i][1] <= self.threshold + self.threshold + self.threshold:
+                            # is little
+                            _, _, cp = self.sections[s]._compare_similar_width_area_to_sibling(to_locate_properties[i],
+                                                                                               only_width=True)
+                            if cp > -1:
+                                if self.sections[s].bottom < to_locate[i][3]:
+                                    self.sections[s].bottom = to_locate[i][3]
+                                if self.sections[s].siblings[cp].bottom < to_locate[i][3]:
+                                    self.sections[s].siblings[cp].bottom = to_locate[i][3]
+                                self.sections[s].siblings[cp].add_writing_area(to_locate_properties[i])
+                                self.sections[s].siblings[cp].sort_content()
+                            else:
+                                new_section = True
+                        else:
+                            new_section = True
+                    else:
+                        # nova secció
+                        new_section = True
+                if new_section:
+                    if to_locate_properties[i]['is_single']:
+                        # crear una nova SingleSection i afegir la wa en cas contrari
+                        min_top = min(wa[1], self.sections[s].bottom)  # wa[3] # max(wa[3], self.sections[s].top)
+                        if s == len(self.sections)-1:
+                            max_bottom = self.page_boundary[3]
+                        else:
+                            max_bottom = max(self.sections[s + 1].bottom, wa[3])  # wa[1] # min(self.sections[s - 1].bottom, wa[1])
+                        if min_top < self.sections[s].bottom:
+                            self.sections[s].bottom = min_top
+                        section = SingleSection(self, [min_left, min_top, max_right, max_bottom])
+                        section.add_writing_area(to_locate_properties[i])
+                    else:
+                        # crear una nova BigSectionOfSibling i una SingleSection com a sibling i afegir-hi la wa en cas contrari
+                        min_top = min(wa[1], self.sections[s].bottom)  # wa[3] # max(wa[3], self.sections[s].top)
+                        if s == len(self.sections) - 1:
+                            max_bottom = self.page_boundary[3]
+                        else:
+                            max_bottom = max(self.sections[s + 1].bottom,
+                                             wa[3])  # wa[1] # min(self.sections[s - 1].bottom, wa[1])
+                        if min_top < self.sections[s].bottom:
+                            self.sections[s].bottom = min_top
+                        section = BigSectionOfSibling(self,
+                                                      [min_left, min_top, max_right, max_bottom])
+                        col = SingleSection(section, [to_locate[i][0], min_top, to_locate[i][2], max_bottom])
+                        col.add_writing_area(to_locate_properties[i])
+                        section.add_new_section(col)
+                    new_sections.append(section)
+                    self.add_new_section(section)
+                    self.sort_content()
 
     @staticmethod
     def build_lauoud_from_sections(page_boundary, sections, writing_area_list, w: int, h: int, threshold=None,
@@ -1320,11 +1282,11 @@ class MainLayout(StructuredSection):
         main_layout.sort_content(True)
         # # ajustar medidas exteriores
         main_layout._resize_left_sections()
-        # main_layout._resize_top_sections()
-        # main_layout._resize_right_sections()
-        # main_layout._resize_bottom_sections()
-        # #llenar gaps i ajustar medidas
-        # main_layout._fill_vertical_gaps_and_resize()
+        main_layout._resize_top_sections()
+        main_layout._resize_right_sections()
+        main_layout._resize_bottom_sections()
+        #llenar gaps i ajustar medidas
+        main_layout._fill_vertical_gaps_and_resize()
 
         main_layout.sort_content(True)
         return main_layout
