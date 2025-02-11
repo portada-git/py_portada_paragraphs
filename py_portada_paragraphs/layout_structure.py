@@ -588,7 +588,7 @@ class MainLayout(StructuredSection):
                 self.page_boundary[0] = section.left
             if type(section) is BigSectionOfSibling:
                 for col in section.siblings:
-                    if col.left > self.page_boundary[0]:
+                    if col.left < self.page_boundary[0]:
                         self.page_boundary[0] = col.left
 
         for i, section in enumerate(self.left_sections):
@@ -1318,13 +1318,13 @@ class MainLayout(StructuredSection):
         main_layout.process_inside_unlocated_areas(image, lmodel)
         main_layout.process_post_unlocated_areas()
         main_layout.sort_content(True)
-        # ajustar medidas exteriores
+        # # ajustar medidas exteriores
         main_layout._resize_left_sections()
-        main_layout._resize_top_sections()
-        main_layout._resize_right_sections()
-        main_layout._resize_bottom_sections()
-        #llenar gaps i ajustar medidas
-        main_layout._fill_vertical_gaps_and_resize()
+        # main_layout._resize_top_sections()
+        # main_layout._resize_right_sections()
+        # main_layout._resize_bottom_sections()
+        # #llenar gaps i ajustar medidas
+        # main_layout._fill_vertical_gaps_and_resize()
 
         main_layout.sort_content(True)
         return main_layout

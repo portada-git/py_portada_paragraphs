@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: py-portada-paragraphs
-Version: 0.0.11
+Version: 0.0.12
 Summary: Process to get paragraphs from documment images using YOLO model in PortADa project
 Home-page: https://github.com/portada-git/py_portada_paragraphs
 Author: PortADa team
