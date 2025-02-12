@@ -1,7 +1,7 @@
 import os
 from ultralytics import YOLO
 import numpy as np
-from .py_portada_utility_for_layout import contains
+from .py_portada_utility_for_layout import contains, overlap_horizontally
 
 
 def calculate_overlap_vectorized(box, boxes):
@@ -256,6 +256,38 @@ def get_sections_and_page(image: np.array, model=None):
     # for block in block_boxes:
     #     other_boxes.append(block)
 
+    for block in block_boxes:
+        new_sections = []
+        for s, section in enumerate(sorted_sections):
+            if contains([0,1,2,3], section['container'], block, 10):
+                add_block_as_column = True
+                for c, col in enumerate(section['boxes']):
+                    if contains([0,1,2,3], col, block, 10):
+                        add_block_as_column = False
+                        break
+                if add_block_as_column:
+                    cpos = -1
+                    overlaps = False
+                    for c, col in enumerate(section['boxes']):
+                        if overlap_horizontally(col, block, 10):
+                            overlaps=True
+                        if contains([0,2], col, block, 10):
+                            cpos=c
+                            break
+                    if cpos == -1:
+                        if overlaps:
+                            new_sections.append(block)
+                        else:
+                            section['boxes'].append(block)
+                    else:
+                        section['boxes'][cpos][0] = min( section['boxes'][cpos][0], block[0])
+                        section['boxes'][cpos][1] = min( section['boxes'][cpos][1], block[1])
+                        section['boxes'][cpos][2] = max( section['boxes'][cpos][2], block[2])
+                        section['boxes'][cpos][3] = max( section['boxes'][cpos][3], block[3])
+        for new_section in new_sections:
+            sorted_sections.append({'container': new_section, 'boxes': [new_section]})
+    sorted_sections.sort(key=lambda X: X['container'][1] * 10000 + X['container'][0])
+
     kept_others = []
     to_delete = []
     for other in other_boxes:
@@ -321,7 +353,7 @@ def get_sections_and_page(image: np.array, model=None):
     # kept_others.sort(key=lambda X:X['container'][1] * 10000 + X['container'][0])
     sorted_sections.extend(kept_others)
     sorted_sections.sort(key=lambda X: X['container'][1] * 10000 + X['container'][0])
-    sorted_sections = redefine_sections(sorted_sections)
+    # sorted_sections = redefine_sections(sorted_sections)
     for sorted_section in sorted_sections:
         if len(sorted_section['boxes']) > 0:
             min_top = sorted_section['container'][3]

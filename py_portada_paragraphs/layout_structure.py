@@ -305,11 +305,11 @@ class AbstractSection:
     def get_vertical_positioning_vs(self, box):
         pass
 
-    def get_left_boundary_for(self, p1, p2=None):
+    def get_left_right_boundary_for(self, box):
         pass
 
-    def get_right_boundary_for(self, p1, p2=None):
-        pass
+    # def get_right_boundary_for(self, p1, p2=None):
+    #     pass
 
 class StructuredSection(AbstractSection):
     """
@@ -560,14 +560,12 @@ class MainLayout(StructuredSection):
             if rel_bottom < 0 and inc_bottom <= self.threshold:
                 section.bottom += inc_bottom//2
             elif rel_bottom < 0:
-                new_box = [self.page_boundary[0], section.bottom, self.page_boundary[2], section.bottom + inc_bottom]
+                new_box = [section.left, section.bottom, section.right, section.bottom + inc_bottom]
                 for j, section2 in enumerate(self.sections):
                     # TODO Buscar marges laterals i ajustar la nova caixa
-                    o, xl = section2.get_left_boundary_for(new_box[1], new_box[3])
-                    if o and new_box[0] < xl:
+                    o, xl, xr = section2.get_left_right_boundary_for(new_box)
+                    if o:
                         new_box[0] = xl
-                    o, xr = section2.get_right_boundary_for(new_box[1], new_box[3])
-                    if o and new_box[0] > xr:
                         new_box[2] = xr
                 new_section = SingleSection(self, new_box)
                 new_section.writing_areas.append(new_box)
@@ -594,7 +592,10 @@ class MainLayout(StructuredSection):
         for i, section in enumerate(self.left_sections):
             section.left = self.page_boundary[0]
             if type(section) is BigSectionOfSibling:
-                section._resize_left_sections()
+                if len(section.siblings)>1:
+                    section._resize_left_sections()
+                elif len(section.siblings)==1:
+                    section.siblings[0].left = section.left
 
     def _resize_right_sections(self):
         for section in self.right_sections:
@@ -608,7 +609,10 @@ class MainLayout(StructuredSection):
         for section in self.right_sections:
             section.right = self.page_boundary[2]
             if type(section) is BigSectionOfSibling:
-                section._resize_right_sections()
+                if len(section.siblings)>1:
+                    section._resize_right_sections()
+                elif len(section.siblings)==1:
+                    section.siblings[0].right = section.right
 
     def _resize_top_sections(self):
         for section in self.top_sections:
@@ -622,7 +626,10 @@ class MainLayout(StructuredSection):
         for section in self.top_sections:
             section.top = self.page_boundary[1]
             if type(section) is BigSectionOfSibling:
-                section._resize_top_sections()
+                if len(section.siblings) > 1:
+                    section._resize_top_sections()
+                elif len(section.siblings) == 1:
+                    section.siblings[0].top = section.top
 
     def _resize_bottom_sections(self):
         for section in self.bottom_sections:
@@ -636,7 +643,10 @@ class MainLayout(StructuredSection):
         for section in self.bottom_sections:
             section.bottom = self.page_boundary[3]
             if type(section) is BigSectionOfSibling:
-                section._resize_bottom_sections()
+                if len(section.siblings)>1:
+                    section._resize_bottom_sections()
+                elif len(section.siblings)==1:
+                    section.siblings[0].bottom = section.bottom
 
     def add_writing_area(self, writing_area_properties):
         # searching predicted section position compatible with the writing area
@@ -858,7 +868,14 @@ class MainLayout(StructuredSection):
                         if self.sections[s].can_be_added(to_locate_properties[i], only_width=True):
                             if self.sections[s].top > to_locate[i][1]:
                                 self.sections[s].top = to_locate[i][1]
-                            self.sections[s].add_writing_area(to_locate_properties[i])
+                            if self.sections[s].can_be_added(to_locate_properties[i]):
+                                self.sections[s].add_writing_area(to_locate_properties[i])
+                            elif self.sections[s].can_be_inserted_a_column_for(to_locate_properties[i]):
+                                # insert
+                                section = SingleSection(self.sections[s], to_locate[i])
+                                section.add_writing_area(to_locate_properties[i])
+                                self.sections[s].add_new_section(section)
+                                self.sections[s].sort_content()
                         elif self.sections[s].can_be_inserted_a_column_for(to_locate_properties[i]):
                             # insert
                             section = SingleSection(self.sections[s], to_locate[i])
@@ -869,7 +886,7 @@ class MainLayout(StructuredSection):
                             if self.sections[s - 1].bottom < to_locate[i][3]:
                                 self.sections[s - 1].bottom = to_locate[i][3]
                             self.sections[s-1].add_writing_area(to_locate_properties[i])
-                        elif s> 0 and self.sections[s-1].can_be_inserted_a_column_for(to_locate_properties[i]):
+                        elif s> 0 and type(self.sections[s-1]) is BigSectionOfSibling and self.sections[s-1].can_be_inserted_a_column_for(to_locate_properties[i]):
                             # insert
                             section = SingleSection(self.sections[s-1], to_locate[i])
                             section.add_writing_area(to_locate_properties[i])
@@ -934,7 +951,7 @@ class MainLayout(StructuredSection):
                 new_section = self.sections[s + 1]
                 new_section.top = box_to_locate_properties['area'][1]
             else:
-                new_section = SingleSection(self, box_to_locate_properties['area'])
+                new_section = SingleSection(self, [section.left, box_to_locate_properties['area'][1], section.right,  box_to_locate_properties['area'][3]])
                 self.add_new_section(new_section)
             new_section.add_writing_area(box_to_locate_properties)
             new_section.sort_content()
@@ -1326,35 +1343,43 @@ class BigSectionOfSibling(StructuredSection):
     def siblings(self):
         return self.sections
 
-    def get_left_boundary_for(self, p1, p2=None):
-        ret = -1
-        y1, y2, x1, x2 = calculate_coordinates(p1, p2, 0, 0)
-        b = [x1, y1, x2, y2]
+    def get_left_right_boundary_for(self, b):
+        p = False
+        r = l = -1
         if overlap_vertically(self.coordinates, b, self.threshold):
-            cp = -1
+            cpl = -1
+            cpr = -1
             for i in range(len(self.siblings)):
-                if overlap_vertically(self.siblings[i].coordinates, b, self.threshold):
-                    cp = i
+                if cpr == -1 and overlap_vertically(self.siblings[i].coordinates, b, self.threshold):
+                    cpl = i
+                if cpr > -1 and not overlap_vertically(self.siblings[i].coordinates, b, self.threshold):
+                    cpr = i
                 else:
-                    break
+                    cpr = i
 
-            if cp > -1:
-                ret = self.siblings[cp].left
-        return ret > -1, ret
+            if cpl > -1:
+                l = min(b[0], self.siblings[cpl].right)
+            else:
+                l = b[0]
+            if cpr > -1:
+                r = max(b[2], self.siblings[cpr].left)
+            else:
+                r = b[3]
+        return p, l, r
 
-    def get_right_boundary_for(self, p1, p2=None):
-        ret = -1
-        y1, y2, x1, x2 = calculate_coordinates(p1, p2, 0, 0)
-        b = [x1, y1, x2, y2]
-        if overlap_vertically(self.coordinates, b, self.threshold):
-            cp = -1
-            for i in range(len(self.siblings)-1, -1, -1):
-                if overlap_vertically(self.siblings[i].coordinates, b, self.threshold):
-                    cp = i
-                    break
-            if cp > -1:
-                ret = self.siblings[cp].right
-        return ret > -1, ret
+    # def get_right_boundary_for(self, p1, p2=None):
+    #     ret = -1
+    #     y1, y2, x1, x2 = calculate_coordinates(p1, p2, 0, 0)
+    #     b = [x1, y1, x2, y2]
+    #     if overlap_vertically(self.coordinates, b, self.threshold):
+    #         cp = -1
+    #         for i in range(len(self.siblings)-1, -1, -1):
+    #             if overlap_vertically(self.siblings[i].coordinates, b, self.threshold):
+    #                 cp = i
+    #                 break
+    #         if cp > -1:
+    #             ret = self.siblings[cp].right
+    #     return ret > -1, ret
 
     def get_vertical_positioning_vs(self, box):
         rel=0
@@ -1402,28 +1427,38 @@ class BigSectionOfSibling(StructuredSection):
                     col.bottom += inc_bottom//2
 
 
-
     def _resize_left_sections(self):
         for col in self.left_sections:
             ov = False
             inc = 10000
             for j, ls in enumerate(self.section_container.sections):
+                if self == ls:
+                    continue
                 if self != ls:
                     if type(ls) is BigSectionOfSibling:
-                        for cls in ls.left_sections:
-                            if (overlap_horizontally([self.left, col.top, col.left, col.bottom], cls.coordinates,
-                                                   self.threshold) and overlap_vertically(col.coordinates, cls.coordinates, self.threshold)):
+                        if contains([0,1,2,3], self.coordinates, ls.coordinates, self.threshold):
+                            if overlap_horizontally([self.left, col.top, col.left, col.bottom], ls.coordinates,
+                                                    self.threshold) and overlap_vertically(col.coordinates,
+                                                                                           ls.coordinates,
+                                                                                           self.threshold):
                                 ov = True
-                                if inc > col.left - cls.right:
-                                    inc = col.left - cls.right
+                                if inc > col.left - ls.right:
+                                    inc = col.left - ls.right
+                        else:
+                            for cls in ls.left_sections:
+                                if (overlap_horizontally([self.left, col.top, col.left, col.bottom], cls.coordinates,
+                                                         self.threshold) and overlap_vertically(col.coordinates,
+                                                                                                cls.coordinates,
+                                                                                                self.threshold)):
+                                    ov = True
+                                    if inc > col.left - cls.right:
+                                        inc = col.left - cls.right
                     else:
                         if overlap_horizontally([self.left, col.top, col.left, col.bottom], ls.coordinates,
                                                    self.threshold) and overlap_vertically(col.coordinates, ls.coordinates, self.threshold):
                             ov = True
                             if inc > col.left - ls.right:
                                 inc = col.left - ls.right
-                if ov:
-                    break
             if not ov:
                 col.left = self.left
             else:
@@ -1436,21 +1471,29 @@ class BigSectionOfSibling(StructuredSection):
             for j, ls in enumerate(self.section_container.sections):
                 if self != ls:
                     if type(ls) is BigSectionOfSibling:
-                        for cls in ls.right_sections:
-                            if overlap_horizontally([col.right, col.top, self.right, col.bottom], cls.coordinates,
-                                                   self.threshold) and overlap_vertically(col.coordinates, cls.coordinates, self.threshold):
+                        if contains([0,1,2,3], self.coordinates, ls.coordinates, self.threshold):
+                            if overlap_horizontally([col.right, col.top, self.right, col.bottom], ls.coordinates,
+                                                    self.threshold) and overlap_vertically(col.coordinates,
+                                                                                           ls.coordinates,
+                                                                                           self.threshold):
                                 ov = True
-                                if inc > cls.left - col.right:
-                                    inc = cls.left - col.right
-
+                                if inc > ls.left - col.right:
+                                    inc = ls.left - col.right
+                        else:
+                            for cls in ls.right_sections:
+                                if overlap_horizontally([col.right, col.top, self.right, col.bottom], cls.coordinates,
+                                                        self.threshold) and overlap_vertically(col.coordinates,
+                                                                                               cls.coordinates,
+                                                                                               self.threshold):
+                                    ov = True
+                                    if inc > cls.left - col.right:
+                                        inc = cls.left - col.right
                     else:
                         if overlap_horizontally([col.right, col.top, self.right, col.bottom], ls.coordinates,
                                                    self.threshold) and overlap_vertically(col.coordinates, ls.coordinates, self.threshold):
                             ov = True
                             if inc > ls.left - col.right:
                                 inc = ls.left - col.right
-                if ov:
-                    break
             if not ov:
                 col.right = self.right
             else:
@@ -1463,15 +1506,24 @@ class BigSectionOfSibling(StructuredSection):
             for j, ls in enumerate(self.section_container.sections):
                 if self != ls:
                     if type(ls) is BigSectionOfSibling:
-                        for cls in ls.top_sections:
-                            if (overlap_vertically([col.left, self.top, col.right, col.top], cls.coordinates,
+                        if contains([0,1,2,3], self.coordinates, ls.coordinates, self.threshold):
+                            if (overlap_vertically([col.left, self.top, col.right, col.top], ls.coordinates,
                                                    self.threshold) and overlap_horizontally(col.coordinates,
-                                                                                            cls.coordinates,
+                                                                                            ls.coordinates,
                                                                                             self.threshold)):
                                 ov = True
-                                if inc > col.top - cls.bottom:
-                                    inc = col.top - cls.bottom
+                                if inc > col.top - ls.bottom:
+                                    inc = col.top - ls.bottom
 
+                        else:
+                            for cls in ls.top_sections:
+                                if (overlap_vertically([col.left, self.top, col.right, col.top], cls.coordinates,
+                                                       self.threshold) and overlap_horizontally(col.coordinates,
+                                                                                                cls.coordinates,
+                                                                                                self.threshold)):
+                                    ov = True
+                                    if inc > col.top - cls.bottom:
+                                        inc = col.top - cls.bottom
                     else:
                         if  (overlap_vertically([col.left, self.top, col.right, col.top], ls.coordinates,
                                                    self.threshold) and overlap_horizontally(col.coordinates,
@@ -1480,8 +1532,6 @@ class BigSectionOfSibling(StructuredSection):
                             ov = True
                             if inc > col.top - ls.bottom:
                                 inc = col.top - ls.bottom
-                if ov:
-                    break
             if not ov:
                 col.top = self.top
             else:
@@ -1494,14 +1544,23 @@ class BigSectionOfSibling(StructuredSection):
             for j, ls in enumerate(self.section_container.sections):
                 if self != ls:
                     if type(ls) is BigSectionOfSibling:
-                        for cls in ls.bottom_sections:
-                            if (overlap_vertically([col.left, col.bottom, col.right, self.bottom], cls.coordinates,
+                        if contains([0,1,2,3], self.coordinates, ls.coordinates, self.threshold):
+                            if (overlap_vertically([col.left, col.bottom, col.right, self.bottom], ls.coordinates,
                                                    self.threshold) and overlap_horizontally(col.coordinates,
-                                                                                            cls.coordinates,
+                                                                                            ls.coordinates,
                                                                                             self.threshold)):
                                 ov = True
-                                if inc > cls.top - col.bottom:
-                                    inc = cls.top - col.bottom
+                                if inc > ls.top - col.bottom:
+                                    inc = ls.top - col.bottom
+                        else:
+                            for cls in ls.bottom_sections:
+                                if (overlap_vertically([col.left, col.bottom, col.right, self.bottom], cls.coordinates,
+                                                       self.threshold) and overlap_horizontally(col.coordinates,
+                                                                                                cls.coordinates,
+                                                                                                self.threshold)):
+                                    ov = True
+                                    if inc > cls.top - col.bottom:
+                                        inc = cls.top - col.bottom
                     else:
                         if (overlap_vertically([col.left, col.bottom, col.right, self.bottom], ls.coordinates,
                                                    self.threshold) and overlap_horizontally(col.coordinates,
@@ -1510,8 +1569,6 @@ class BigSectionOfSibling(StructuredSection):
                             ov = True
                             if inc > ls.top - col.bottom:
                                 inc = ls.top - col.bottom
-                if ov:
-                    break
             if not ov:
                 col.bottom = self.bottom
             else:
@@ -1721,6 +1778,19 @@ class BigSectionOfSibling(StructuredSection):
     def add_writing_area(self, writing_area_properties):
         pos = self.search_sibling(writing_area_properties)
         if pos == -1:
+            if self.can_be_inserted_a_column_for(writing_area_properties):
+                # insert
+                column = SingleSection(self, writing_area_properties['area'])
+                column.add_writing_area(writing_area_properties)
+                self.siblings.append(column)
+                self.siblings.sort(key=lambda x: x[0])
+                if column.down_fill_level > self.down_fill_level:
+                    self.down_fill_level = column.down_fill_level
+                if column.upper_fill_level < self.upper_fill_level:
+                    self.upper_fill_level = column.upper_fill_level
+            else:
+                # TODO ?????
+                raise "Error trying add writing area to wrong column"
             # boundaries = self.where_insert_a_column_for(writing_area_properties)
             # if boundaries is not None:
             #     # insert
@@ -1734,7 +1804,6 @@ class BigSectionOfSibling(StructuredSection):
             #         self.upper_fill_level = column.upper_fill_level
             # else:
             #     raise "Error trying add writing area to wrong column"
-            raise "Error trying add writing area to wrong column"
         else:
             self.siblings[pos].add_writing_area(writing_area_properties)
             if self.siblings[pos].down_fill_level > self.down_fill_level:
@@ -1883,19 +1952,23 @@ class SingleSection(AbstractSection):
             vok, r, v = get_boxes_non_overlapping_positioning(VERTICAL_POSITIONING, box, self.coordinates, self.threshold)
         return vok, r, v
 
-    def get_left_boundary_for(self, p1, p2=None):
-        ret = -1
-        y1, y2, x1, x2 = calculate_coordinates(p1, p2, 0, 0)
-        if overlap_vertically(self.coordinates, [x1, y1, x2, y2], self.threshold):
-            ret = self.left
-        return ret > -1, ret
 
-    def get_right_boundary_for(self, p1, p2=None):
-        ret = -1
-        y1, y2, x1, x2 = calculate_coordinates(p1, p2, 0, 0)
-        if overlap_vertically(self.coordinates, [x1, y1, x2, y2], self.threshold):
-            ret = self.right
-        return ret > -1, ret
+
+    def get_left_right_boundary_for(self, b):
+        p = False
+        l = r = -1
+        if overlap_vertically(self.coordinates, b, self.threshold):
+            l = min(b[0], self.right)
+            r = max(b[2], self.left)
+            p = True
+        return p, l, r
+
+    # def get_right_boundary_for(self, p1, p2=None):
+    #     ret = -1
+    #     y1, y2, x1, x2 = calculate_coordinates(p1, p2, 0, 0)
+    #     if overlap_vertically(self.coordinates, [x1, y1, x2, y2], self.threshold):
+    #         ret = self.right
+    #     return ret > -1, ret
 
     def cut(self, boundaries):
         need_remove = False
