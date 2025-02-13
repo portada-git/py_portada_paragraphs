@@ -1,7 +1,7 @@
 import os
 from ultralytics import YOLO
 import numpy as np
-from .py_portada_utility_for_layout import contains, overlap_horizontally
+from .py_portada_utility_for_layout import contains, overlap_horizontally, overlap_vertically, is_similar_distance
 
 
 def calculate_overlap_vectorized(box, boxes):
@@ -192,24 +192,86 @@ def get_annotated_prediction(image: np.array, model):
 
 
 def redefine_sections(sections):
-    to_remove = set()
+    to_remove_sections = set()
     result = []
-    for i, section in enumerate(sections):
-        if i in to_remove:
+    for ids, section1 in enumerate(sections):
+        if ids in to_remove_sections:
             continue
+        for idc, col1 in enumerate(section1['boxes']):
+            for jds in range(ids + 1, len(sections)):
+                section2 = sections[jds]
+                new_columns = []
+                to_remove_columns = set()
+                for jdc, col2 in enumerate(section2['boxes']):
+                    if jdc in to_remove_columns:
+                        continue
+                    if overlap_horizontally(col1, col2, 60) and overlap_vertically(col1, col2, 60):
+                        if is_similar_distance(col1[1], col2[1], col1[3], col2[3], 60):
+                            # remove
+                            to_remove_columns.append(jdc)
+                        else:
+                            if abs(col1[1] - col2[1]) > 30:
+                                with_min_top, with_max_top = (col1, col2) if col1[1] < col2[1] else (col2, col1)
+                                with_max_bottom, with_min_bottom = (col1, col2) if col1[3] > col2[3] else (col2, col1)
+                                if with_min_top == with_max_bottom:
+                                    new_columns.append([with_max_bottom[0], with_min_bottom[3], with_max_bottom[2],
+                                                  with_max_bottom[3]])
+                                    col2 = [with_max_top[0], with_max_top[1], with_max_top[2], with_max_top[3]]
+                                col1[0] = with_min_top[0]
+                                col1[1] = with_min_top[1]
+                                col1[2] = with_min_top[2]
+                                col1[3] = with_max_top[1]
+                                col2[0] = with_max_top[0]
+                                col2[1] = with_max_top[1]
+                                col2[2] = with_max_top[2]
+                                col2[3] = with_max_top[3]
+                for nc in new_columns:
+                    section2['boxes'].append(nc)
+                section2['boxes'].sort(key=lambda X: X[1] * 10000 + X[0])
 
-        s_center = (section['container'][0] + section['container'][2]) / 2
-        for j in range(i + 1, len(sections)):
-            sj_center = (sections[j]['container'][0] + sections[j]['container'][2]) / 2
-            if abs(s_center - sj_center) < 60 and len(section['boxes']) == len(sections[j]['boxes']) and \
-                    sections[j]['container'][1] - section['container'][3] < 60:  # threshold == 60
-                to_remove.add(j)
-                section['container'][3] = max(section['container'][3], sections[j]['container'][3])
-                for c in range(len(section['boxes'])):
-                    section['boxes'][c][3] = max(section['boxes'][c][3], sections[j]['boxes'][c][3])
-        result.append(section)
+        # s_center = (section['container'][0] + section['container'][2]) / 2
+        # for j in range(i + 1, len(sections)):
+        #     sj_center = (sections[j]['container'][0] + sections[j]['container'][2]) / 2
+        #     if abs(s_center - sj_center) < 60 and len(section['boxes']) == len(sections[j]['boxes']) and \
+        #             sections[j]['container'][1] - section['container'][3] < 60:  # threshold == 60
+        #         to_remove.add(j)
+        #         section['container'][3] = max(section['container'][3], sections[j]['container'][3])
+        #         for c in range(len(section['boxes'])):
+        #             section['boxes'][c][3] = max(section['boxes'][c][3], sections[j]['boxes'][c][3])
+        # result.append(section)
 
     return result
+
+
+def restructure_columns(sections):
+    for i, section in enumerate(sections):
+        to_remove = set()
+        for j1, col1 in enumerate(section['boxes']):
+            if j1 in to_remove:
+                continue
+            for j2 in range(j1+1, len(section['boxes'])):
+                col2 = section['boxes'][j2]
+                if overlap_horizontally(col1, col2, 60) and overlap_vertically(col1, col2, 60):
+                    if is_similar_distance(col1[1], col2[1], col1[3], col2[3], 60):
+                        #remove
+                        to_remove.append(j2)
+                    else:
+                        if abs(col1[1] - col2[1]) > 30:
+                            with_min_top, with_max_top = (col1, col2) if col1[1] < col2[1] else (col2, col1)
+                            with_max_bottom, with_min_bottom = (col1, col2) if  col1[3] > col2[3] else (col2, col1)
+                            if with_min_top == with_max_bottom:
+                                new_column = [with_max_bottom[0], with_min_bottom[3], with_max_bottom[2], with_max_bottom[3]]
+                                col2 = [with_max_top[0], with_max_top[1], with_max_top[2], with_max_top[3]]
+                                section['boxes'].append(new_column)
+                                section['boxes'].sort(key=lambda X: X[1] * 10000 + X[0])
+                            col1[0] = with_min_top[0]
+                            col1[1] = with_min_top[1]
+                            col1[2] = with_min_top[2]
+                            col1[3] = with_max_top[1]
+                            col2[0] = with_max_top[0]
+                            col2[1] = with_max_top[1]
+                            col2[2] = with_max_top[2]
+                            col2[3] = with_max_top[3]
 
 
 def get_sections_and_page(image: np.array, model=None):
@@ -271,7 +333,7 @@ def get_sections_and_page(image: np.array, model=None):
                     for c, col in enumerate(section['boxes']):
                         if overlap_horizontally(col, block, 10):
                             overlaps=True
-                        if contains([0,2], col, block, 10):
+                        if contains([0,2], col, block, 30):
                             cpos=c
                             break
                     if cpos == -1:
@@ -354,6 +416,7 @@ def get_sections_and_page(image: np.array, model=None):
     sorted_sections.extend(kept_others)
     sorted_sections.sort(key=lambda X: X['container'][1] * 10000 + X['container'][0])
     # sorted_sections = redefine_sections(sorted_sections)
+    # restructure_columns(sorted_sections)
     for sorted_section in sorted_sections:
         if len(sorted_section['boxes']) > 0:
             min_top = sorted_section['container'][3]

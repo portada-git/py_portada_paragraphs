@@ -1158,7 +1158,8 @@ class MainLayout(StructuredSection):
             for unloc_wa in unlocated_box['boxes']:
                 to_locate.append(unloc_wa['area'])
                 to_locate_properties.append(unloc_wa)
-            for i, wa in enumerate(to_locate):
+            for i in range(len(to_locate)):
+                wa = to_locate[i]
                 if type(unlocated_box['referred_section'].section_container) is BigSectionOfSibling:
                     section = unlocated_box['referred_section'].section_container
                 else:
@@ -1170,79 +1171,149 @@ class MainLayout(StructuredSection):
                 new_section = False
                 # wap = get_writing_area_properties(to_locate, i, min_left, max_right, self.threshold)
                 if to_locate_properties[i]['is_single']:
-                    if ((type(self.sections[s]) is SingleSection or len(self.sections[s].siblings) == 1)
+                    added = False
+                    solved = False
+                    if (s < len(self.sections) - 1 and type(self.sections[s+1]) is SingleSection
+                            and self.sections[s+1].can_be_added(to_locate_properties[i], only_width=True)):
+                        if self.sections[s+1].top > to_locate[i][1]:
+                            self.sections[s+1].top = to_locate[i][1]
+                        self.sections[s+1].add_writing_area(to_locate_properties[i])
+                        solved = True
+                    elif (len(new_sections) > 0 and type(new_sections[-1]) is SingleSection
+                            and new_sections[-1].can_be_added(to_locate_properties[i], only_width=True)):
+                        if new_sections[-1].top > to_locate[i][1]:
+                            new_sections[-1].top = to_locate[i][1]
+                        new_sections[-1].add_writing_area(to_locate_properties[i])
+                        added = True
+                    if (i == len(to_locate)-1 and (type(self.sections[s]) is SingleSection or len(self.sections[s].siblings) == 1)
                             and self.sections[s].can_be_added(to_locate_properties[i], only_width=True)):
-                        if self.sections[s].bottom < to_locate[i][3]:
-                            self.sections[s].bottom = to_locate[i][3]
-                        self.sections[s].add_writing_area(to_locate_properties[i])
-                    elif s < len(self.sections)-1 and (
-                            (type(self.sections[s + 1]) is SingleSection or len(self.sections[s + 1].siblings) == 1)
-                            and self.sections[s + 1].can_be_added(to_locate_properties[i], only_width=True)):
-                        if self.sections[s + 1].top > to_locate[i][1]:
-                            self.sections[s + 1].top = to_locate[i][1]
-                        self.sections[s + 1].add_writing_area(to_locate_properties[i])
-                    else:
-                        new_section = True
-                else:
-                    if type(self.sections[s]) is BigSectionOfSibling:
-                        if self.sections[s].can_be_added(to_locate_properties[i], only_width=True):
-                            if self.sections[s].bottom > to_locate[i][3]:
+                        if added:
+                            #fusionar
+                            self.sections[s].top = min(self.sections[s].top, new_sections[-1][1])
+                            self.sections[s].bottom = max(self.sections[s].bottom, new_sections[-1][3])
+                            new_sections.pop(len(new_sections)-1)
+                        elif not solved:
+                            #afegir
+                            if self.sections[s].bottom < to_locate[i][3]:
                                 self.sections[s].bottom = to_locate[i][3]
                             self.sections[s].add_writing_area(to_locate_properties[i])
-                        elif self.sections[s].can_be_inserted_a_column_for(to_locate_properties[i]):
+                    elif not added and not solved:
+                        new_section = True
+                else:
+                    # added = False
+                    if s < len(self.sections) - 1 and type(self.sections[s+1]) is BigSectionOfSibling:
+                        if self.sections[s+1].can_be_added(to_locate_properties[i], only_width=True):
+                            if self.sections[s+1].top > to_locate[i][1]:
+                                self.sections[s+1].top = to_locate[i][1]
+                                for col in self.sections[s+1].siblings:
+                                    col.top = self.sections[s+1].top
+                            self.sections[s+1].add_writing_area(to_locate_properties[i])
+                        elif self.sections[s+1].can_be_inserted_a_column_for(to_locate_properties[i]):
                             # insert
-                            section = SingleSection(self.sections[s], to_locate[i])
+                            section = SingleSection(self.sections[s+1], to_locate[i])
                             section.add_writing_area(to_locate_properties[i])
-                            self.sections[s].add_new_section(section)
-                            self.sections[s].sort_content()
+                            self.sections[s+1].add_new_section(section)
+                            self.sections[s+1].sort_content()
                         elif to_locate[i][3] - to_locate[i][1] <= self.threshold + self.threshold + self.threshold:
                             # is little
-                            _, _, cp = self.sections[s]._compare_similar_width_area_to_sibling(to_locate_properties[i],
-                                                                                               only_width=True)
+                            _, _, cp = self.sections[s+1]._compare_similar_width_area_to_sibling(to_locate_properties[i],
+                                                                                              only_width=True)
                             if cp > -1:
-                                if self.sections[s].bottom < to_locate[i][3]:
-                                    self.sections[s].bottom = to_locate[i][3]
-                                if self.sections[s].siblings[cp].bottom < to_locate[i][3]:
-                                    self.sections[s].siblings[cp].bottom = to_locate[i][3]
-                                self.sections[s].siblings[cp].add_writing_area(to_locate_properties[i])
-                                self.sections[s].siblings[cp].sort_content()
+                                if self.sections[s+1].bottom < to_locate[i][3]:
+                                    self.sections[s+1].bottom = to_locate[i][3]
+                                if self.sections[s+1].siblings[cp].bottom < to_locate[i][3]:
+                                    self.sections[s+1].siblings[cp].bottom = to_locate[i][3]
+                                self.sections[s+1].siblings[cp].add_writing_area(to_locate_properties[i])
+                                self.sections[s+1].siblings[cp].sort_content()
                             else:
                                 new_section = True
                         else:
                             new_section = True
+                    elif len(new_sections) > 0 and type(new_sections[-1]) is BigSectionOfSibling:
+                        if new_sections[-1].can_be_added(to_locate_properties[i], only_width=True):
+                            if new_sections[-1].top < to_locate[i][1]:
+                                new_sections[-1].top = to_locate[i][1]
+                            new_sections[-1].add_writing_area(to_locate_properties[i])
+                        elif new_sections[-1].can_be_inserted_a_column_for(to_locate_properties[i]):
+                            # insert
+                            section = SingleSection(new_sections[-1], to_locate[i])
+                            section.add_writing_area(to_locate_properties[i])
+                            new_sections[-1].add_new_section(section)
+                            new_sections[-1].sort_content()
+                        elif to_locate[i][3] - to_locate[i][1] <= self.threshold + self.threshold + self.threshold:
+                            # is little
+                            _, _, cp = new_sections[-1]._compare_similar_width_area_to_sibling(to_locate_properties[i],
+                                                                                               only_width=True)
+                            if cp > -1:
+                                if new_sections[-1].bottom < to_locate[i][3]:
+                                    new_sections[-1].bottom = to_locate[i][3]
+                                if new_sections[-1].siblings[cp].bottom < to_locate[i][3]:
+                                    new_sections[-1].siblings[cp].bottom = to_locate[i][3]
+                                new_sections[-1].siblings[cp].add_writing_area(to_locate_properties[i])
+                                new_sections[-1].siblings[cp].sort_content()
+                            else:
+                                new_section = True
+                        else:
+                            new_section = True
+                    #     added = True
+                    # if i == len(to_locate)-1 and  type(self.sections[s]) is BigSectionOfSibling:
+                    #    if self.sections[s].can_be_added(to_locate_properties[i], only_width=True):
+                    #         if self.sections[s].bottom > to_locate[i][3]:
+                    #             self.sections[s].bottom = to_locate[i][3]
+                    #         self.sections[s].add_writing_area(to_locate_properties[i])
+                    #     elif self.sections[s].can_be_inserted_a_column_for(to_locate_properties[i]):
+                    #         # insert
+                    #         section = SingleSection(self.sections[s], to_locate[i])
+                    #         section.add_writing_area(to_locate_properties[i])
+                    #         self.sections[s].add_new_section(section)
+                    #         self.sections[s].sort_content()
+                    #     elif to_locate[i][3] - to_locate[i][1] <= self.threshold + self.threshold + self.threshold:
+                    #         # is little
+                    #         _, _, cp = self.sections[s]._compare_similar_width_area_to_sibling(to_locate_properties[i],
+                    #                                                                            only_width=True)
+                    #         if cp > -1:
+                    #             if self.sections[s].bottom < to_locate[i][3]:
+                    #                 self.sections[s].bottom = to_locate[i][3]
+                    #             if self.sections[s].siblings[cp].bottom < to_locate[i][3]:
+                    #                 self.sections[s].siblings[cp].bottom = to_locate[i][3]
+                    #             self.sections[s].siblings[cp].add_writing_area(to_locate_properties[i])
+                    #             self.sections[s].siblings[cp].sort_content()
+                    #         else:
+                    #             new_section = True
+                    #     else:
+                    #         new_section = True
                     else:
                         # nova secció
                         new_section = True
                 if new_section:
+                    if s == len(self.sections)-1:
+                        max_bottom = self.bottom
+                    else:
+                        max_bottom = self.sections[s+1].top
                     if to_locate_properties[i]['is_single']:
                         # crear una nova SingleSection i afegir la wa en cas contrari
-                        min_top = min(wa[1], self.sections[s].bottom)  # wa[3] # max(wa[3], self.sections[s].top)
-                        if s == len(self.sections)-1:
-                            max_bottom = self.page_boundary[3]
-                        else:
-                            max_bottom = max(self.sections[s + 1].bottom, wa[3])  # wa[1] # min(self.sections[s - 1].bottom, wa[1])
-                        if min_top < self.sections[s].bottom:
-                            self.sections[s].bottom = min_top
+                        min_top = wa[1]
                         section = SingleSection(self, [min_left, min_top, max_right, max_bottom])
                         section.add_writing_area(to_locate_properties[i])
                     else:
                         # crear una nova BigSectionOfSibling i una SingleSection com a sibling i afegir-hi la wa en cas contrari
-                        min_top = min(wa[1], self.sections[s].bottom)  # wa[3] # max(wa[3], self.sections[s].top)
-                        if s == len(self.sections) - 1:
-                            max_bottom = self.page_boundary[3]
-                        else:
-                            max_bottom = max(self.sections[s + 1].bottom,
-                                             wa[3])  # wa[1] # min(self.sections[s - 1].bottom, wa[1])
-                        if min_top < self.sections[s].bottom:
-                            self.sections[s].bottom = min_top
+                        min_top = wa[1]
                         section = BigSectionOfSibling(self,
                                                       [min_left, min_top, max_right, max_bottom])
-                        col = SingleSection(section, [to_locate[i][0], min_top, to_locate[i][2], max_bottom])
+                        ncols =  (max_right-min_left) // ( to_locate_properties[i]['guess_right']-to_locate_properties[i]['guess_left'] )
+                        ncols_float =  (max_right-min_left) / ( to_locate_properties[i]['guess_right']-to_locate_properties[i]['guess_left'] )
+                        if ncols_float - ncols > 0.4:
+                            ncols += 1
+                        width = (max_right-min_left) / ncols
+                        left = to_locate_properties[i]['guess_left']
+                        right = max(left + width, to_locate[i][3])
+                        col_boundary = [left, min_top, int(right), max_bottom]
+                        col = SingleSection(section, col_boundary)
                         col.add_writing_area(to_locate_properties[i])
                         section.add_new_section(col)
                     new_sections.append(section)
                     self.add_new_section(section)
-                    self.sort_content()
+                    self.sort_content(True)
 
     @staticmethod
     def build_lauoud_from_sections(page_boundary, sections, writing_area_list, w: int, h: int, threshold=None,
@@ -1679,7 +1750,7 @@ class BigSectionOfSibling(StructuredSection):
     def is_area_compatible(self, writing_area_properties, only_width=False):
         ret = self._has_area_similar_width(writing_area_properties, only_width)
         if not ret:
-            ret = self._has_area_similar_center(writing_area_properties)
+            ret = self._has_area_similar_center(writing_area_properties, only_width)
         return ret
 
     def search_sibling(self, writing_area_properties, only_width=False):
@@ -1837,6 +1908,23 @@ class SingleSection(AbstractSection):
         self._suma_center = 0
         self._is_column = type(container) is BigSectionOfSibling
         self._writing_areas = []
+        self.bad_size_counter = [0,0,0,0]
+        self.counter_limit_to_resize=4
+
+    @property
+    def needResize(self, border_num=-1):
+        ret = False
+        if border_num==-1 or border_num==0:
+            ret = ret or self.bad_size_counter[0]
+        if border_num==-1 or border_num==1:
+            ret = ret or self.bad_size_counter[1]
+        if border_num==-1 or border_num==2:
+            ret = ret or self.bad_size_counter[2]
+        if border_num==-1 or border_num==3:
+            ret = ret or self.bad_size_counter[3]
+        return ret
+
+
 
     @property
     def center(self):
@@ -1895,9 +1983,11 @@ class SingleSection(AbstractSection):
         self._len += 1
         self._suma_center += (x1 + x2) / 2
         if x1 < self.left:
-            self.left = x1
+            # self.left = x1
+            self.bad_size_counter[0] += 1
         if x2 > self.right:
-            self.right = x2
+            # self.right = x2
+            self.bad_size_counter[2] += 1
         self._writing_areas.append(writing_area_properties['area'])
 
     def get_single_sections_as_boxes(self, boxes=[], add_threshold=False):
