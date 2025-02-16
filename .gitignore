@@ -1,4 +1,7 @@
 .DS_Store
 main.py
 .venv
-
+*.Rproj
+.Rproj.user
+.Rhistory
+.gitignore
