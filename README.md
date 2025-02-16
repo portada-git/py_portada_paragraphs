@@ -1,2 +1,2 @@
 # py_portada_paragraphs
-Segmentación de imágenes de única columna en párrafos
+Segmentación de bloques de única columna en párrafos

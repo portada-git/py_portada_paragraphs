@@ -67,7 +67,7 @@ def process_directory(input_dir, output_dir):
 
 if __name__ == '__main__':
     
-    input_dir = "./demo/columnas/input"
-    output_dir = "./demo/columnas/segmentos"
+    input_dir = "./demo/bloques/input"
+    output_dir = "./demo/bloques/segmentos"
 
     process_directory(input_dir, output_dir)
