@@ -211,3 +211,118 @@ def get_relative_left_loc_in_boxes(rel_box, fix_box):
 
 def get_relative_right_loc_in_boxes(rel_box, fix_box):
     return _get_relative_loc_in_boxes([0,2], rel_box, fix_box, False)
+
+def fill_gaps_in_boxes(boxes):
+    """
+    Inserta nuevas cajas para llenar huecos verticales significativos entre cajas.
+    Se utiliza la caja más ancha para determinar el ancho de las cajas insertadas.
+    Cada caja se representa como [x1, y1, x2, y2].  
+    Retorna una lista de cajas que incluye las originales y las insertadas.
+    """
+    boxes = np.array(boxes)
+    boxes = boxes[boxes[:, 1].argsort()]
+    widest_box = max(boxes, key=lambda box: box[2] - box[0])
+    widest_width = widest_box[2] - widest_box[0]
+    new_boxes = []
+    for i in range(len(boxes) - 1):
+        current_box = boxes[i]
+        next_box = boxes[i + 1]
+        gap = next_box[1] - current_box[3]
+        if gap > 20:
+            new_box_y1 = current_box[3]
+            new_box_y2 = next_box[1]
+            new_box_x1 = int((current_box[0] + current_box[2] - widest_width) // 2)
+            new_box_x2 = new_box_x1 + widest_width
+            new_boxes.append([new_box_x1, new_box_y1, new_box_x2, new_box_y2])
+    if new_boxes:
+        all_boxes = np.vstack([boxes, new_boxes])
+        all_boxes = all_boxes[all_boxes[:, 1].argsort()]
+    else:
+        all_boxes = boxes
+    return all_boxes.tolist()
+
+def remove_edge_boxes(boxes, width_threshold=0.15, edge_threshold=0.2):
+    """
+    Filtra las cajas consideradas como de borde basándose en la posición de su centro
+    y en su ancho. Retorna una lista de cajas que cumplen con los criterios definidos.
+    """
+    boxes = np.array(boxes)
+    box_widths = boxes[:, 2] - boxes[:, 0]
+    box_centers = (boxes[:, 0] + boxes[:, 2]) / 2
+    median_center = np.median(box_centers)
+    max_width = np.max(box_widths)
+    center_range = np.max(box_centers) - np.min(box_centers)
+    mask = ((np.abs(box_centers - median_center) <= center_range * edge_threshold) |
+            (box_widths >= max_width * width_threshold))
+    filtered_boxes = boxes[mask]
+    return filtered_boxes.tolist()
+
+def adjust_box_widths_and_center(boxes):
+    """
+    Ajusta todas las cajas para que tengan el ancho máximo encontrado y las centra
+    en torno al centro mediano. Retorna la lista de cajas ajustadas.
+    """
+    boxes = np.array(boxes)
+    box_widths = boxes[:, 2] - boxes[:, 0]
+    max_width = np.max(box_widths)
+    box_centers = (boxes[:, 0] + boxes[:, 2]) / 2
+    median_center = int(np.median(box_centers))
+    adjusted_boxes = np.zeros_like(boxes)
+    adjusted_boxes[:, 0] = median_center - max_width // 2
+    adjusted_boxes[:, 2] = median_center + max_width // 2
+    adjusted_boxes[:, 1] = boxes[:, 1]
+    adjusted_boxes[:, 3] = boxes[:, 3]
+    return adjusted_boxes.astype(int).tolist()
+
+def adjust_box_heights(boxes):
+    """
+    Ajusta las alturas de las cajas distribuyendo equitativamente los espacios verticales
+    entre cajas consecutivas. Retorna una lista de cajas con las coordenadas y actualizadas.
+    """
+    boxes = np.array(boxes)
+    sorted_indices = np.argsort(boxes[:, 1])
+    sorted_boxes = boxes[sorted_indices]
+    adjusted_boxes = []
+    for i in range(len(sorted_boxes)):
+        current_box = sorted_boxes[i].tolist()
+        if i < len(sorted_boxes) - 1:
+            next_box = sorted_boxes[i + 1]
+            gap = next_box[1] - current_box[3]
+            if gap > 0:
+                current_box[3] += gap // 2
+                sorted_boxes[i + 1][1] -= gap // 2
+        adjusted_boxes.append(current_box)
+    return adjusted_boxes
+
+def remove_overlapping_segments(detections, iou_threshold=0.5, area_ratio_threshold=0.8):
+    """
+    Filtra las detecciones superpuestas utilizando umbrales de IoU y razón de área.
+    Las detecciones se ordenan por confianza y se retienen aquellas que no se solapan
+    excesivamente con las ya guardadas. Retorna la lista de detecciones filtradas.
+    """
+    sorted_detections = sorted(detections, key=lambda x: x[4], reverse=True)
+    kept_detections = []
+    for detection in sorted_detections:
+        if all(
+            not (
+                calculate_iou(detection[:4], kept[:4])[0] > iou_threshold or
+                ((area1 := (detection[2] - detection[0]) * (detection[3] - detection[1])) >
+                 (area2 := (kept[2] - kept[0]) * (kept[3] - kept[1])) and 
+                 calculate_iou(detection[:4], kept[:4])[1] / area2 > area_ratio_threshold) or
+                (area2 > area1 and 
+                 calculate_iou(detection[:4], kept[:4])[1] / area1 > area_ratio_threshold)
+            )
+            for kept in kept_detections
+        ):
+            kept_detections.append(detection)
+    return kept_detections
+
+def get_model(fpath=None):
+    """
+    Retorna una instancia de YOLOv10 utilizando la ruta especificada.  
+    Si no se proporciona una ruta, se utiliza una ruta predeterminada.
+    """
+    if fpath is None:
+        p = os.path.abspath(os.path.dirname(__file__))
+        fpath = f"{p}/modelo/doclayout_yolo_docstructbench_imgsz1024.pt"
+    return YOLOv10(fpath)
