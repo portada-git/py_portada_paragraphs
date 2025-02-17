@@ -316,13 +316,3 @@ def remove_overlapping_segments(detections, iou_threshold=0.5, area_ratio_thresh
         ):
             kept_detections.append(detection)
     return kept_detections
-
-def get_model(fpath=None):
-    """
-    Retorna una instancia de YOLOv10 utilizando la ruta especificada.  
-    Si no se proporciona una ruta, se utiliza una ruta predeterminada.
-    """
-    if fpath is None:
-        p = os.path.abspath(os.path.dirname(__file__))
-        fpath = f"{p}/modelo/doclayout_yolo_docstructbench_imgsz1024.pt"
-    return YOLOv10(fpath)

@@ -1,8 +1,9 @@
 from pathlib import Path
-from py_portada_paragraphs import raw_predictions, extract_fragments_and_get_json, MainLayout, get_paragraph_model
+from py_portada_paragraphs import raw_predictions, extract_fragments_and_get_json, MainLayout, get_paragraph_model, AddingAreaInWrongColumnException
 import cv2
 import os
-from .py_yolo_layout import get_sections_and_page, get_model as get_layout_model
+
+from .py_yolo_layout import get_sections_and_page, get_model as get_layout_model, get_bocks
 import numpy as np
 
 
@@ -118,12 +119,11 @@ class PortadaParagraphCutter(object):
         sections, _ = get_sections_and_page(self.image, self.yolo_layout_model)
         boxes = []
         for section in sections:
-            if len(section['columns'])==0:
-                boxes.append(section['box'])
+            if len(section['boxes']) == 0:
+                boxes.append(section['container'])
             else:
-                for col in section['columns']:
+                for col in section['boxes']:
                     boxes.append(col)
-
         return boxes
 
     @staticmethod
@@ -151,24 +151,48 @@ class PortadaParagraphCutter(object):
         blocks = self.get_raw_paragraphs(conf=conf, iou_threshold=iou_threshold,
                                              area_ratio_threshold=area_ratio_threshold, margin=self.margin)
         blocks.sort(key=lambda x: x[1] * 10000 + x[0])
-
         layout = MainLayout.build_lauoud_from_sections(page, sections, blocks, self.image.shape[1],
                                                        self.image.shape[0], 30, image=self.image,
                                                        lmodel=self.yolo_layout_model)
         return layout
 
-    def get_columns(self, conf=0.1, iou_threshold=None, area_ratio_threshold=None):
-        layout = self.get_layout(conf, iou_threshold, area_ratio_threshold)
-        boxes = layout.get_single_sections_as_boxes(2)
+    def get_blocks(self, conf=0.1, iou_threshold=None, area_ratio_threshold=None):
+        blocks = []
+        cols = self.get_columns(conf, iou_threshold, area_ratio_threshold)
+        blocks.extend(cols)
+        # for col in cols:
+        #     x1, y1, x2, y2 = col
+        #     if y2-y1 > 2000:
+        #         # buscar corte con los párrafos guardados en la columna
+        #         image_block = self.image[y1:y2, x1:x2]
+        #         block_of_columns = get_bocks(image_block, self.yolo_layout_model)
+        #         if len(block_of_columns) == 0:
+        #             blocks.append(col)
+        #         else:
+        #             block_of_columns.sort(key=lambda X:X[1])
+        #             for block_of_column in block_of_columns:
+        #                 y1_b = block_of_column[1] + y1
+        #                 y2_b = block_of_column[3] + y1
+        #                 blocks.append([x1, y1_b, x2, y2_b])
+        #     else:
+        #         blocks.append(col)
+        return blocks
+
+    def get_columns(self, conf=0.1, iou_threshold=None, area_ratio_threshold=None, optimal_height=2000):
+        try:
+            layout = self.get_layout(conf, iou_threshold, area_ratio_threshold)
+            boxes = layout.get_single_sections_as_boxes(2, optimal_height)
+        except AddingAreaInWrongColumnException:
+            boxes = self.get_raw_columns()
         return boxes
 
     def process_image(self):
         self.__verify_image()
-        boxes = self.get_columns()
-        column_images = self.__cut_images_from_blocks(self.image, boxes)
+        block = self.get_blocks()
+        block_images = self.__cut_images_from_blocks(self.image, block)
 
         paragraph_images = []
-        for image in column_images:
+        for i, image in enumerate(block_images):
             ajson = extract_fragments_and_get_json(image, self.yolo_paragraph_model, iou_threshold=self.iou_threshold,
                                                    area_ratio_threshold=self.area_ratio_threshold, margin=self.margin)
             for info_block in ajson:

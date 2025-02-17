@@ -274,6 +274,21 @@ def restructure_columns(sections):
                             col2[3] = with_max_top[3]
 
 
+def get_bocks(image: np.array, model=None):
+    if model is None:
+        model = get_model()
+    elif type(model) is str:
+        model = get_model(model)
+    results = model.predict(image)
+    boxes = results[0].boxes.xyxy.cpu().numpy()
+    conf = results[0].boxes.conf.cpu().numpy()
+    classes = results[0].boxes.cls.cpu().numpy()
+    names = results[0].names
+
+    block_boxes, _ = get_boundaries_for_class(boxes, classes, names, ['bloque'])
+    return  block_boxes
+
+
 def get_sections_and_page(image: np.array, model=None):
     """
     Procesa una imagen individual, detectando y ajustando las columnas.
@@ -407,6 +422,7 @@ def get_sections_and_page(image: np.array, model=None):
                         to_delete.append(index)
                     if y2 - oy2 >= 25:
                         sorted_sections[index[0]]['boxes'].append([x1, oy2, x2, y2])
+    to_delete.sort(key=lambda x: x[0]*1000+x[1], reverse=True)
     for index in to_delete:
         sorted_sections[index[0]]['boxes'].pop(index[1])
     for section in sorted_sections:

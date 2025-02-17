@@ -2107,10 +2107,11 @@ class SingleSection(AbstractSection):
             id_wa = 0
             n = 0
             while h1 < y2:
-                if id_wa >= len(self.writing_areas)-1:
+                if id_wa == len(self.writing_areas) and h1 < y2:
                     h1 = y2
                     self._add_column_as_box(x1, h0, x2, h1, boxes, add_threshold)
                 else:
+                    if id_wa len(self.writing_areas)
                     h = self.writing_areas[id_wa][3]
                     if h-h0 > optimal_height:
                         if n > 0:
@@ -2119,8 +2120,8 @@ class SingleSection(AbstractSection):
                             id_wa += 1
                         else:
                             n += 1
-                        self._add_column_as_box(x1, h0, x2, h1, boxes, add_threshold)
                         h0=h1
+                        self._add_column_as_box(x1, h0, x2, h1, boxes, add_threshold)
                     else:
                         h1 = h
                         id_wa += 1
