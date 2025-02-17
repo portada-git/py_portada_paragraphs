@@ -316,3 +316,13 @@ def remove_overlapping_segments(detections, iou_threshold=0.5, area_ratio_thresh
         ):
             kept_detections.append(detection)
     return kept_detections
+
+
+def remove_classes(detections, classes_to_remove=[2, 3, 4]):
+    """
+    Remueve las filas correspondientes a clases específicas.
+    """
+    mask = ~np.isin(detections[:, 5], classes_to_remove)
+    filtered_detections = detections[mask]
+    
+    return filtered_detections
