@@ -333,3 +333,30 @@ def remove_classes(detections, classes_to_remove=[2, 3, 4]):
     filtered_detections = detections[mask]
     
     return filtered_detections
+
+def adjust_box_heights(boxes, image_height):
+
+    boxes = np.array(boxes)
+    
+    sorted_indices = np.argsort(boxes[:, 1])
+    sorted_boxes = boxes[sorted_indices]
+    
+    adjusted_boxes = []
+    
+    for i in range(len(sorted_boxes)):
+        current_box = sorted_boxes[i].tolist()
+        if i < len(sorted_boxes) - 1:
+            next_box = sorted_boxes[i + 1]
+            gap = next_box[1] - current_box[3] 
+            if gap > 0:
+                current_box[3] += gap // 2
+                sorted_boxes[i + 1][1] -= gap // 2
+        adjusted_boxes.append(current_box)
+    
+    top_margin = int(image_height * 0.005)
+    bottom_margin = image_height - top_margin
+    
+    adjusted_boxes[0][1] = top_margin
+    adjusted_boxes[-1][3] = bottom_margin
+    
+    return adjusted_boxes

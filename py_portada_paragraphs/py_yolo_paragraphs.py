@@ -30,7 +30,7 @@ def process_image(image_path, model, output_dir, imgsz=1024, conf=0.05, device="
         boxes = fill_gaps_in_boxes(boxes)
         boxes = remove_edge_boxes(boxes)
         boxes = adjust_box_widths_and_center(boxes)
-        boxes = adjust_box_heights(boxes)
+        boxes = adjust_box_heights(boxes=boxes, image_height=alto)
 
         with Image.open(image_path) as image:
             img_w, img_h = image.size
