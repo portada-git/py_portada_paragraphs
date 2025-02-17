@@ -3,6 +3,7 @@ README.md
 pyproject.toml
 setup.py
 py_portada_paragraphs/__init__.py
+py_portada_paragraphs/layout_structure (Copia en conflicto de Josep Cañellas 2025-02-17).py
 py_portada_paragraphs/layout_structure.py
 py_portada_paragraphs/portada_cut_in_paragraphs.py
 py_portada_paragraphs/py_portada_utility_for_layout.py

@@ -52,8 +52,8 @@ def extract_fragments_from_image(image, model: YOLOv10 = None, imgsz=1024, conf=
     if len(boxes)>0:
         boxes = fill_gaps_in_boxes(boxes)
         boxes = remove_edge_boxes(boxes)
-        boxes = adjust_box_widths_and_center(boxes)
-        boxes = adjust_box_heights(boxes, image_height=image.shape[0])
+        boxes = adjust_box_widths_and_center(boxes, image.shape[1])
+        boxes = adjust_box_heights(boxes, image.shape[0])
 
     return boxes
 

@@ -257,42 +257,39 @@ def remove_edge_boxes(boxes, width_threshold=0.15, edge_threshold=0.2):
     filtered_boxes = boxes[mask]
     return filtered_boxes.tolist()
 
-def adjust_box_widths_and_center(boxes):
-    """
-    Ajusta todas las cajas para que tengan el ancho máximo encontrado y las centra
-    en torno al centro mediano. Retorna la lista de cajas ajustadas.
-    """
-    boxes = np.array(boxes)
-    box_widths = boxes[:, 2] - boxes[:, 0]
-    max_width = np.max(box_widths)
-    box_centers = (boxes[:, 0] + boxes[:, 2]) / 2
-    median_center = int(np.median(box_centers))
-    adjusted_boxes = np.zeros_like(boxes)
-    adjusted_boxes[:, 0] = median_center - max_width // 2
-    adjusted_boxes[:, 2] = median_center + max_width // 2
-    adjusted_boxes[:, 1] = boxes[:, 1]
-    adjusted_boxes[:, 3] = boxes[:, 3]
-    return adjusted_boxes.astype(int).tolist()
+def adjust_box_widths_and_center(boxes, image_width):
 
-def adjust_box_heights(boxes):
-    """
-    Ajusta las alturas de las cajas distribuyendo equitativamente los espacios verticales
-    entre cajas consecutivas. Retorna una lista de cajas con las coordenadas y actualizadas.
-    """
+    margin = int(image_width * 0.005)
+
+    new_x1 = margin
+    new_x2 = image_width - margin
+    
     boxes = np.array(boxes)
-    sorted_indices = np.argsort(boxes[:, 1])
-    sorted_boxes = boxes[sorted_indices]
-    adjusted_boxes = []
-    for i in range(len(sorted_boxes)):
-        current_box = sorted_boxes[i].tolist()
-        if i < len(sorted_boxes) - 1:
-            next_box = sorted_boxes[i + 1]
-            gap = next_box[1] - current_box[3]
-            if gap > 0:
-                current_box[3] += gap // 2
-                sorted_boxes[i + 1][1] -= gap // 2
-        adjusted_boxes.append(current_box)
-    return adjusted_boxes
+    
+    boxes[:, 0] = new_x1
+    boxes[:, 2] = new_x2
+    
+    return boxes.astype(int).tolist()
+
+# def adjust_box_heights(boxes):
+#     """
+#     Ajusta las alturas de las cajas distribuyendo equitativamente los espacios verticales
+#     entre cajas consecutivas. Retorna una lista de cajas con las coordenadas y actualizadas.
+#     """
+#     boxes = np.array(boxes)
+#     sorted_indices = np.argsort(boxes[:, 1])
+#     sorted_boxes = boxes[sorted_indices]
+#     adjusted_boxes = []
+#     for i in range(len(sorted_boxes)):
+#         current_box = sorted_boxes[i].tolist()
+#         if i < len(sorted_boxes) - 1:
+#             next_box = sorted_boxes[i + 1]
+#             gap = next_box[1] - current_box[3]
+#             if gap > 0:
+#                 current_box[3] += gap // 2
+#                 sorted_boxes[i + 1][1] -= gap // 2
+#         adjusted_boxes.append(current_box)
+#     return adjusted_boxes
 
 def remove_overlapping_segments(detections, iou_threshold=0.5, area_ratio_threshold=0.8):
     """
@@ -326,3 +323,30 @@ def remove_classes(detections, classes_to_remove=[2, 3, 4]):
     filtered_detections = detections[mask]
     
     return filtered_detections
+
+def adjust_box_heights(boxes, image_height):
+
+    boxes = np.array(boxes)
+    
+    sorted_indices = np.argsort(boxes[:, 1])
+    sorted_boxes = boxes[sorted_indices]
+    
+    adjusted_boxes = []
+    
+    for i in range(len(sorted_boxes)):
+        current_box = sorted_boxes[i].tolist()
+        if i < len(sorted_boxes) - 1:
+            next_box = sorted_boxes[i + 1]
+            gap = next_box[1] - current_box[3] 
+            if gap > 0:
+                current_box[3] += gap // 2
+                sorted_boxes[i + 1][1] -= gap // 2
+        adjusted_boxes.append(current_box)
+    
+    top_margin = int(image_height * 0.005)
+    bottom_margin = image_height - top_margin
+    
+    adjusted_boxes[0][1] = top_margin
+    adjusted_boxes[-1][3] = bottom_margin
+    
+    return adjusted_boxes
