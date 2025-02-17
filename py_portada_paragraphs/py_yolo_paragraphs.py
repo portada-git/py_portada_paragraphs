@@ -20,6 +20,7 @@ def process_image(image_path, model, output_dir, imgsz=1024, conf=0.05, device="
         base_name = os.path.splitext(os.path.basename(image_path))[0]
 
         det_res = model.predict(image_path, imgsz=imgsz, conf=conf, device=device)
+        alto, ancho, canales = det_res[0].orig_img.shape
         detections = det_res[0].boxes.data.cpu().numpy()
         detections_filter = remove_classes(detections)
 

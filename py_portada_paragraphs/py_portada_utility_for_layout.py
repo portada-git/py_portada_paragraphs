@@ -257,22 +257,19 @@ def remove_edge_boxes(boxes, width_threshold=0.15, edge_threshold=0.2):
     filtered_boxes = boxes[mask]
     return filtered_boxes.tolist()
 
-def adjust_box_widths_and_center(boxes):
-    """
-    Ajusta todas las cajas para que tengan el ancho máximo encontrado y las centra
-    en torno al centro mediano. Retorna la lista de cajas ajustadas.
-    """
+def adjust_box_widths_and_center(boxes, image_width):
+
+    margin = int(image_width * 0.005)
+
+    new_x1 = margin
+    new_x2 = image_width - margin
+    
     boxes = np.array(boxes)
-    box_widths = boxes[:, 2] - boxes[:, 0]
-    max_width = np.max(box_widths)
-    box_centers = (boxes[:, 0] + boxes[:, 2]) / 2
-    median_center = int(np.median(box_centers))
-    adjusted_boxes = np.zeros_like(boxes)
-    adjusted_boxes[:, 0] = median_center - max_width // 2
-    adjusted_boxes[:, 2] = median_center + max_width // 2
-    adjusted_boxes[:, 1] = boxes[:, 1]
-    adjusted_boxes[:, 3] = boxes[:, 3]
-    return adjusted_boxes.astype(int).tolist()
+    
+    boxes[:, 0] = new_x1
+    boxes[:, 2] = new_x2
+    
+    return boxes.astype(int).tolist()
 
 def adjust_box_heights(boxes):
     """
