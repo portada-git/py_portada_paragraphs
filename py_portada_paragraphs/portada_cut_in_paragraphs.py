@@ -186,17 +186,24 @@ class PortadaParagraphCutter(object):
             boxes = self.get_raw_columns()
         return boxes
 
-    def process_image(self):
+    def process_image(self, cutting_type='P'):
         self.__verify_image()
-        block = self.get_blocks()
-        block_images = self.__cut_images_from_blocks(self.image, block)
+        if cutting_type == 'C':
+            column_boxes = self.get_columns()
+            fragment_images = self.__cut_images_from_blocks(self.image, column_boxes)
+        elif cutting_type == 'B':
+            block_boxes = self.get_blocks()
+            fragment_images = self.__cut_images_from_blocks(self.image, block_boxes)
+        else:
+            block = self.get_blocks()
+            block_images = self.__cut_images_from_blocks(self.image, block)
 
-        paragraph_images = []
-        for i, image in enumerate(block_images):
-            ajson = extract_fragments_and_get_json(image, self.yolo_paragraph_model, iou_threshold=self.iou_threshold,
-                                                   area_ratio_threshold=self.area_ratio_threshold, margin=self.margin)
-            for info_block in ajson:
-                paragraph_images.append(info_block["image"])
+            fragment_images = []
+            for i, image in enumerate(block_images):
+                ajson = extract_fragments_and_get_json(image, self.yolo_paragraph_model, iou_threshold=self.iou_threshold,
+                                                       area_ratio_threshold=self.area_ratio_threshold, margin=self.margin)
+                for info_block in ajson:
+                    fragment_images.append(info_block["image"])
 
         file_name = Path(self.image_path).stem
         ext = Path(self.image_path).suffix
@@ -204,7 +211,7 @@ class PortadaParagraphCutter(object):
             ext = ".jpg"
         self.image_blocks = []
         count = 0
-        for image in paragraph_images:
+        for image in fragment_images:
             self.image_blocks.append(
                 dict(file_name=file_name, extension=ext, count=count, image=cv2.imencode(ext, image)[1]))
             count = count + 1
