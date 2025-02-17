@@ -7,11 +7,12 @@ from .py_portada_utility_for_layout import (
     adjust_box_widths_and_center,
     adjust_box_heights,
     remove_overlapping_segments,
+    remove_classes,
     get_model
 )
 
 def process_image(image_path, model, output_dir, imgsz=1024, conf=0.05, device="cpu",
-                  iou_threshold=0.5, area_ratio_threshold=0.8, margin=5):
+                  iou_threshold=0.5, area_ratio_threshold=0.8, margin_y=5, margin_x=5):
     """
     Procesa una imagen, detecta segmentos y guarda los recortes en el directorio de salida.
     """
@@ -20,8 +21,9 @@ def process_image(image_path, model, output_dir, imgsz=1024, conf=0.05, device="
 
         det_res = model.predict(image_path, imgsz=imgsz, conf=conf, device=device)
         detections = det_res[0].boxes.data.cpu().numpy()
+        detections_filter = remove_classes(detections)
 
-        kept_detections = remove_overlapping_segments(detections, iou_threshold, area_ratio_threshold)
+        kept_detections = remove_overlapping_segments(detections_filter, iou_threshold, area_ratio_threshold)
         boxes = np.array([[int(coord) for coord in det[:4]] for det in kept_detections])
 
         boxes = fill_gaps_in_boxes(boxes)
@@ -32,10 +34,10 @@ def process_image(image_path, model, output_dir, imgsz=1024, conf=0.05, device="
         with Image.open(image_path) as image:
             img_w, img_h = image.size
             for i, (x1, y1, x2, y2) in enumerate(boxes, start=1):
-                x1_adj = max(0, x1 - margin)
-                y1_adj = max(0, y1 - margin)
-                x2_adj = min(img_w, x2 + margin)
-                y2_adj = min(img_h, y2 + margin)
+                x1_adj = max(0, x1 - margin_x)
+                y1_adj = max(0, y1 - margin_y)
+                x2_adj = min(img_w, x2 + margin_x)
+                y2_adj = min(img_h, y2 + margin_y)
 
                 segment = image.crop((x1_adj, y1_adj, x2_adj, y2_adj))
                 segment_path = os.path.join(output_dir, f"{base_name}_{i:03d}.jpg")

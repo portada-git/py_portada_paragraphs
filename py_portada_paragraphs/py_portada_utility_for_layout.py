@@ -326,3 +326,13 @@ def get_model(fpath=None):
         p = os.path.abspath(os.path.dirname(__file__))
         fpath = f"{p}/modelo/doclayout_yolo_docstructbench_imgsz1024.pt"
     return YOLOv10(fpath)
+
+
+def remove_classes(detections, classes_to_remove=[2, 3, 4]):
+    """
+    Remueve las filas correspondientes a clases específicas.
+    """
+    mask = ~np.isin(detections[:, 5], classes_to_remove)
+    filtered_detections = detections[mask]
+    
+    return filtered_detections
