@@ -27,6 +27,7 @@ def raw_predictions(image, model: YOLOv10 = None, imgsz=1024, conf=0.2, device="
         model = get_model()
     det_res = model.predict(image, imgsz=imgsz, conf=conf, device=device)
     all_detections = det_res[0].boxes.data.cpu().numpy()
+    detections_filter = remove_classes(all_detections)
     kept_detections = remove_overlapping_segments(all_detections, iou_threshold, area_ratio_threshold)
     ret_boxes = []
     ret_properties = []
