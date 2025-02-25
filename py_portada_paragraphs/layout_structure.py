@@ -1380,10 +1380,6 @@ class MainLayout(StructuredSection):
     @staticmethod
     def build_lauoud_from_sections(page_boundary, sections, writing_area_list, w: int, h: int, threshold=None,
                                    image=None, lmodel=None):
-        main_layout = MainLayout(page_boundary, w, h, proposed_sections=sections)
-        if threshold is not None:
-            main_layout.threshold = threshold
-
         # The page boundary comes from the YOLO prediction. The prediction is not always correct. Here we try to correct excessive page margins.
         if page_boundary[0] > w * 0.05:
             page_boundary[0] = threshold
@@ -1394,16 +1390,22 @@ class MainLayout(StructuredSection):
         if page_boundary[3] < h * 0.95:
             page_boundary[3] = h - threshold
 
+        main_layout = MainLayout(page_boundary, w, h, proposed_sections=sections)
+        if threshold is not None:
+            main_layout.threshold = threshold
+
         # calculate min left  and max right areas and removing areas outside the page boundary
         min_left = 100000
         max_right = 0
         to_remove = []
+        sum_ar_par = 0
         for i, writing_area in enumerate(writing_area_list):
             if not contains([0, 1, 2, 3], page_boundary, writing_area, main_layout.threshold):
                 to_remove.append(i)
                 continue
             a_left = writing_area[0]
             a_right = writing_area[2]
+            sum_ar_par += (writing_area[2]-writing_area[0])*(writing_area[3]-writing_area[1])
             if min_left > a_left:
                 min_left = a_left
             if max_right < a_right:
@@ -1411,37 +1413,47 @@ class MainLayout(StructuredSection):
         for i in reversed(to_remove):
             writing_area_list.pop(i)
 
+        if sum_ar_par/((page_boundary[2]-page_boundary[0])*(page_boundary[3]-page_boundary[1])) < 0.4:
+            main_layout.__build_layout_from_sections_only()
+        else:
+            main_layout.__build_layout_from_sections_and_paragraphs(writing_area_list, min_left, max_right, image, lmodel)
+        return main_layout
+
+
+    def __build_layout_from_sections_only(self):
+        while len(self.proposed_sections)>0:
+            proposed_section = self.proposed_sections[0]
+            self.add_section_from_proposed_section(0, 0<=len(proposed_section['boxes'])<=1)
+
+    def __build_layout_from_sections_and_paragraphs(self, writing_area_list, min_left, max_right, image=None, lmodel=None):
         # Trying to locate all areas in predicted sections. Unlocated areas are saved in UnlocatedBoxes attribute
         writing_area_list.sort(key=lambda x: x[1] * 10000 + x[0])
         for i in range(len(writing_area_list)):
             # Calculating properties for every area (if ares is single (it hasn't siblings), real dimension and guess
             # dimension based into siblings, and so on)
-            wap = get_writing_area_properties(writing_area_list, i, min_left, max_right, main_layout.threshold)
-            main_layout.add_writing_area(wap)
+            wap = get_writing_area_properties(writing_area_list, i, min_left, max_right, self.threshold)
+            self.add_writing_area(wap)
 
         # Trying to resolve unallocated boxes
-        for i in range(len(main_layout.list_of_unlocated_boxes) - 1, -1, -1):
+        for i in range(len(self.list_of_unlocated_boxes) - 1, -1, -1):
             # buscar la secció prèvia a l'àrea
-            if main_layout.clasify_unlocated_area(i):
-                main_layout.list_of_unlocated_boxes.pop(i)
+            if self.clasify_unlocated_area(i):
+                self.list_of_unlocated_boxes.pop(i)
 
         # recol·locar inconherències en columnes
-        main_layout.process_prev_unlocated_areas()
-        main_layout.process_inside_unlocated_areas(image, lmodel)
-        main_layout.process_post_unlocated_areas()
-        main_layout.sort_content(True)
-        # # ajustar medidas exteriores
-        main_layout._resize_left_sections()
-        main_layout._resize_top_sections()
-        main_layout._resize_right_sections()
-        main_layout._resize_bottom_sections()
+        self.process_prev_unlocated_areas()
+        self.process_inside_unlocated_areas(image, lmodel)
+        self.process_post_unlocated_areas()
+        self.sort_content(True)
+        # ajustar medidas exteriores
+        self._resize_left_sections()
+        self._resize_top_sections()
+        self._resize_right_sections()
+        self._resize_bottom_sections()
         #llenar gaps i ajustar medidas
-        main_layout._fill_vertical_gaps_and_resize()
-        main_layout._fill_horizontal_gaps_and_resize()
-
-
-        main_layout.sort_content(True)
-        return main_layout
+        self._fill_vertical_gaps_and_resize()
+        self._fill_horizontal_gaps_and_resize()
+        self.sort_content(True)
 
 
 class BigSectionOfSibling(StructuredSection):
@@ -1611,7 +1623,8 @@ class BigSectionOfSibling(StructuredSection):
                                 if inc > col.left - ls.right:
                                     inc = col.left - ls.right
                         else:
-                            for cls in ls.left_sections:
+                            # for cls in ls.left_sections:
+                            for cls in ls.siblings:
                                 if (overlap_horizontally([self.left, col.top, col.left, col.bottom], cls.coordinates,
                                                          min(self.threshold*2.5, 0.15*(cls.right-cls.left)))
                                         and overlap_vertically(col.coordinates, cls.coordinates, self.threshold)):
@@ -1645,7 +1658,8 @@ class BigSectionOfSibling(StructuredSection):
                                 if inc > ls.left - col.right:
                                     inc = ls.left - col.right
                         else:
-                            for cls in ls.right_sections:
+                            # for cls in ls.right_sections:
+                            for cls in ls.siblings:
                                 if (overlap_horizontally([col.right, col.top, self.right, col.bottom], cls.coordinates,
                                                          min(self.threshold*2.5, 0.15*(cls.right-cls.left)))
                                         and overlap_vertically(col.coordinates, cls.coordinates, self.threshold)):
@@ -1681,7 +1695,8 @@ class BigSectionOfSibling(StructuredSection):
                                     inc = col.top - ls.bottom
 
                         else:
-                            for cls in ls.top_sections:
+                            # for cls in ls.top_sections:
+                            for cls in ls.siblings:
                                 if (overlap_vertically([col.left, min(col.top, self.top), col.right, col.top],
                                                        cls.coordinates, self.threshold)
                                         and overlap_horizontally(col.coordinates, cls.coordinates,
@@ -1718,7 +1733,8 @@ class BigSectionOfSibling(StructuredSection):
                                 if inc > ls.top - col.bottom:
                                     inc = ls.top - col.bottom
                         else:
-                            for cls in ls.bottom_sections:
+                            # for cls in ls.bottom_sections:
+                            for cls in ls.siblings:
                                 if (overlap_vertically([col.left, col.bottom, col.right, max(self.bottom, col.bottom)],
                                                        cls.coordinates, self.threshold)
                                         and overlap_horizontally(col.coordinates,cls.coordinates,
